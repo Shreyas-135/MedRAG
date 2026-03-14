@@ -1,0 +1,180 @@
+---
+# LangChain RAG Example Configuration
+# This file demonstrates all available configuration options for the advanced RAG pipeline
+
+rag:
+  # Enable RAG functionality
+  enabled: true
+  
+  # Use LangChain pipeline (vs simple retrieval)
+  use_langchain: true
+  
+  # ChromaDB Vector Database Configuration
+  chromadb:
+    # Directory to persist ChromaDB data
+    persist_directory: "./chromadb_data"
+    
+    # Collection name for medical X-ray findings
+    collection_name: "medical_xray_findings"
+    
+    # Similarity metric (cosine, l2, ip)
+    similarity_metric: "cosine"
+    
+    # Number of top results to retrieve
+    top_k: 5
+  
+  # Google Gemini LLM Configuration
+  gemini:
+    # API key - set via environment variable for security
+    # Get your key from: https://makersuite.google.com/app/apikey
+    api_key: ${GEMINI_API_KEY}
+    
+    # Model to use (gemini-1.5-flash, gemini-1.5-pro)
+    model: "gemini-1.5-flash"
+    
+    # Temperature for generation (0.0 = deterministic, 1.0 = creative)
+    temperature: 0.3
+    
+    # Maximum tokens in response
+    max_tokens: 500
+    
+    # Top-p sampling
+    top_p: 0.95
+    
+    # Top-k sampling
+    top_k: 40
+  
+  # RAG Pipeline Configuration
+  pipeline:
+    # Number of medical cases to retrieve
+    retrieval_top_k: 3
+    
+    # Citation format (clinical, academic, compact)
+    citation_format: "clinical"
+    
+    # Maximum explanation length
+    explanation_max_length: 500
+    
+    # Use re-ranking for better results
+    use_reranking: false
+    
+    # Include confidence scores
+    include_confidence: true
+
+# Federated Learning Configuration
+federated_learning:
+  # Use Flower framework (vs custom VFL)
+  use_flower: true
+  
+  # Flower Server Configuration
+  server:
+    # Server address
+    address: "[::]:8080"
+    
+    # Number of federation rounds
+    num_rounds: 10
+    
+    # Minimum number of clients to start
+    min_clients: 4
+    
+    # Minimum available clients
+    min_available_clients: 4
+    
+    # Strategy (FedAvg, FedProx, etc.)
+    strategy: "FedAvg"
+    
+    # Round timeout (seconds)
+    round_timeout: 600
+  
+  # Flower Client Configuration
+  client:
+    # Client timeout (seconds)
+    timeout: 300
+    
+    # Maximum retries
+    max_retries: 3
+  
+  # VFL-Specific Settings
+  vfl:
+    # Number of participating hospitals/clients
+    num_clients: 4
+    
+    # Embedding dimension
+    embedding_dim: 64
+    
+    # Aggregation method (sum, average, weighted)
+    aggregation_method: "sum"
+  
+  # Differential Privacy Settings
+  differential_privacy:
+    enabled: true
+    noise_multiplier: 0.1
+    clipping_norm: 1.0
+
+# Training Configuration
+training:
+  # Batch size
+  batch_size: 32
+  
+  # Local epochs per round
+  local_epochs: 5
+  
+  # Learning rate
+  learning_rate: 0.001
+  
+  # Optimizer (adam, sgd)
+  optimizer: "adam"
+  
+  # Use blockchain for aggregation
+  use_blockchain: true
+
+# Model Configuration
+model:
+  # Client model architecture
+  client_architecture: "resnet18"
+  
+  # Server model type
+  server_type: "rag_enhanced"
+  
+  # Number of output classes
+  num_classes: 2
+  
+  # Class names
+  class_names:
+    - "Normal"
+    - "COVID-19"
+
+# Blockchain Configuration
+blockchain:
+  # Enable blockchain logging
+  enabled: true
+  
+  # Network settings (for Ganache)
+  network:
+    url: "http://127.0.0.1:7545"
+    chain_id: 1337
+  
+  # Gas settings
+  gas_limit: 3000000
+
+# Logging Configuration
+logging:
+  # Log level (DEBUG, INFO, WARNING, ERROR)
+  level: "INFO"
+  
+  # Log to file
+  log_file: "./logs/medrag.log"
+  
+  # Enable detailed logging
+  verbose: true
+
+# Medical Knowledge Base
+knowledge_base:
+  # Auto-populate with sample data
+  use_sample_data: true
+  
+  # Path to custom medical knowledge file
+  custom_data_path: null
+  
+  # Update frequency (for periodic refreshes)
+  update_frequency: "weekly"

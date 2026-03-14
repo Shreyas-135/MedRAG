@@ -1,0 +1,8 @@
+{
+  "provider": "ganache",
+  "ganache_url": "http://127.0.0.1:7545",
+  "enable_metamask": true,
+  "network_id": 1337,
+  "gas_limit": 6721975,
+  "gas_price": "20000000000"
+}

@@ -1,0 +1,74 @@
+# Python
+*.pyc
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Virtual Environment
+venv/
+env/
+ENV/
+
+# PyTorch
+*.pth
+*.pkl
+*.ckpt
+
+# Data
+/demo_data/
+/data/
+/dataset/
+/raw_datasets/
+
+# Model Registry
+/models/registry/
+
+# Ledger
+/ledger/
+
+# Blockchain
+/blockchain_data/
+
+# ChromaDB
+/chromadb_data/
+*.chroma
+
+# Temporary
+/tmp/
+*.log
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Streamlit
+.streamlit/
+
+# Old/deprecated entries below (keeping for backward compatibility)
+src/SplitCovid19
+src/__pycache__
+tests/__pycache__
+src/.DS_Store
+tests/.DS_Store
+
+# Dataset directories
+dataset/
+dataset_info.json
+
+# Large dataset files
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+
+# Model checkpoints (keep registry.json but ignore large .pt files)
+models/registry/checkpoints/*.pt
