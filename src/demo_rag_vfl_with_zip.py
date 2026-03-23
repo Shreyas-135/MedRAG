@@ -51,6 +51,47 @@ except ImportError:
     print("Warning: Blockchain integration not available")
 
 
+def _datasize_to_fraction(datasize: float) -> float:
+    """Map the CLI datasize values to a fraction of available training data."""
+    allowed = {1.0, 0.5, 0.25, 0.0125}
+    if datasize not in allowed:
+        raise ValueError("Invalid datasize. Must be 0.0125, 0.25, 0.5 or 1.0")
+    return float(datasize)
+
+
+def _make_train_val_indices(n_total: int, datasize: float, seed: int = 42, train_frac: float = 0.8):
+    """
+    Create dynamic train/val indices based on actual dataset size.
+
+    Subsamples ``n_total`` images according to *datasize*, then splits into
+    train/val using *train_frac*.  At least one sample is guaranteed in each
+    split.
+
+    Args:
+        n_total:    Total number of images in the ImageFolder dataset.
+        datasize:   Fraction of data to use (one of 1.0, 0.5, 0.25, 0.0125).
+        seed:       Random seed for reproducibility (use ``base_seed + client_index``).
+        train_frac: Fraction of the selected subset used for training (default 0.8).
+
+    Returns:
+        Tuple ``(train_idx, val_idx)`` of NumPy integer arrays.
+    """
+    if n_total < 2:
+        raise ValueError(f"Not enough samples to split: {n_total}")
+
+    frac = _datasize_to_fraction(datasize)
+    n_use = min(max(2, int(round(n_total * frac))), n_total)
+
+    rng = np.random.default_rng(seed)
+    perm = rng.permutation(n_total)[:n_use]
+
+    n_train = min(max(1, int(round(n_use * train_frac))), n_use - 1)
+
+    train_idx = perm[:n_train]
+    val_idx = perm[n_train:]
+    return train_idx, val_idx
+
+
 def detect_class_names(datapath):
     """
     Auto-detect class names from the dataset folder structure.
@@ -443,35 +484,13 @@ def main():
         transforms.Resize((224, 224)),
         transforms.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.2),
         transforms.ToTensor(),
+        transforms.Normalize(mean=[0.485, 0.456, 0.406],
+                             std=[0.229, 0.224, 0.225]),
     ])
     
     train_loaders = []
     val_loaders = []
     test_loaders = []
-    
-    # Dataset splits based on datasize
-    if args.datasize == 1.0:
-        train_val_permute = np.random.permutation(np.arange(989))
-        train_permute = train_val_permute[:800]
-        val_permute = train_val_permute[800:950]
-        test_permute = np.random.permutation(np.arange(563))[:200]
-    elif args.datasize == 0.5:
-        train_val_permute = np.random.permutation(np.arange(989))
-        train_permute = train_val_permute[:400]
-        val_permute = train_val_permute[400:500]
-        test_permute = np.random.permutation(np.arange(563))[:100]
-    elif args.datasize == 0.25:
-        train_val_permute = np.random.permutation(np.arange(989))
-        train_permute = train_val_permute[:200]
-        val_permute = train_val_permute[200:250]
-        test_permute = np.random.permutation(np.arange(563))[:50]
-    elif args.datasize == 0.0125:
-        train_val_permute = np.random.permutation(np.arange(989))
-        train_permute = train_val_permute[:10]
-        val_permute = train_val_permute[10:20]
-        test_permute = np.random.permutation(np.arange(563))[:10]
-    else:
-        raise Exception("Invalid datasize. Must be 0.0125, 0.25, 0.5 or 1.0")
     
     # Note: This supports both client0/1/2/3 (legacy) and hospitalA/B/C/D (new) naming
     # For ZIP-extracted datasets, use hospitalA/B/C/D structure
@@ -500,10 +519,17 @@ def main():
                 root=f'{base_path}/train', 
                 transform=transform
             )
-            train_data = torch.utils.data.Subset(train_dataset, indices=train_permute)
-            val_data = torch.utils.data.Subset(train_dataset, indices=val_permute)
+            # Dynamic train/val split based on actual dataset size per client
+            train_idx, val_idx = _make_train_val_indices(
+                n_total=len(train_dataset),
+                datasize=args.datasize,
+                seed=42 + i,
+                train_frac=0.8,
+            )
+            train_data = torch.utils.data.Subset(train_dataset, indices=train_idx)
+            val_data = torch.utils.data.Subset(train_dataset, indices=val_idx)
             # num_workers=0 avoids multiprocessing shutdown noise in Codespaces/Python 3.12
-            train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=False, num_workers=0)
+            train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True, num_workers=0)
             train_loaders.append(train_loader)
             val_loader = DataLoader(val_data, batch_size=batch_size, shuffle=False, num_workers=0)
             val_loaders.append(val_loader)
@@ -512,15 +538,16 @@ def main():
                 root=f'{base_path}/test', 
                 transform=transform
             )
-            test_data = torch.utils.data.Subset(test_dataset, indices=test_permute)
-            test_loader = DataLoader(test_data, batch_size=batch_size, shuffle=False, num_workers=0)
+            # Use the full test set (no hardcoded sub-sampling)
+            test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, num_workers=0)
             test_loaders.append(test_loader)
             
             # Collect statistics
             dataset_stats.append({
                 'hospital': hospital_id,
-                'train_samples': len(train_permute),
-                'test_samples': len(test_permute)
+                'train_samples': len(train_idx),
+                'val_samples': len(val_idx),
+                'test_samples': len(test_dataset),
             })
         
         # Print dataset summary with hospital naming
@@ -528,7 +555,8 @@ def main():
         print("DATASET SUMMARY")
         print("="*80)
         for stat in dataset_stats:
-            print(f"✓ Hospital {stat['hospital']}: {stat['train_samples']} train, {stat['test_samples']} test samples")
+            print(f"✓ Hospital {stat['hospital']}: {stat['train_samples']} train, "
+                  f"{stat['val_samples']} val, {stat['test_samples']} test samples")
         print("="*80)
         print("✓ X-ray dataset loaded successfully")
     except Exception as e:
