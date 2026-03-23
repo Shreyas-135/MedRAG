@@ -172,38 +172,6 @@ Privacy Budget: ε = 1.0
 
 st.markdown("---")
 
-# Comparison Section
-st.markdown("## ⚖️ Blockchain Comparison")
-
-col1, col2 = st.columns(2)
-
-with col1:
-    st.markdown("### ❌ Without Blockchain")
-    st.error("""
-    **Drawbacks:**
-    - 🔴 Central server controls aggregation
-    - 🔴 No transparency into process
-    - 🔴 Trust required in coordinator
-    - 🔴 Single point of failure
-    - 🔴 No audit trail
-    - 🔴 Potential for manipulation
-    - 🔴 Cannot verify aggregation fairness
-    """)
-
-with col2:
-    st.markdown("### ✅ With Blockchain")
-    st.success("""
-    **Benefits:**
-    - 🟢 Decentralized aggregation
-    - 🟢 Full transparency for all hospitals
-    - 🟢 Trustless collaboration
-    - 🟢 Distributed and resilient
-    - 🟢 Immutable audit trail
-    - 🟢 Cryptographically verified
-    - 🟢 Fair and verifiable aggregation
-    """)
-
-st.markdown("---")
 
 # Verification Tool
 st.markdown("## 🔐 Transaction Verification Tool")
