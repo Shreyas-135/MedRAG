@@ -9,7 +9,7 @@ __pycache__/
 # Virtual Environment
 venv/
 env/
-ENV/
+.env.example
 
 # PyTorch
 *.pth
