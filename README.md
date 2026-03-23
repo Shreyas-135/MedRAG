@@ -47,7 +47,83 @@ MedRAG includes comprehensive blockchain features for transparent and verifiable
 - **💰 Wallet Integration**: MetaMask connection for transaction signing (demo mode)
 - **📊 Enhanced Training Dashboard**: Compare VFL, VFL+Blockchain, VFL+RAG, and Full System
 
-### 🛠️ Ganache Setup (Optional)
+### 🛠️ Hardhat Local Blockchain Demo (Windows / Linux / macOS)
+
+Run **real** on-chain transactions against a local Hardhat node – no MetaMask or Ganache required.
+
+#### Prerequisites
+- [Node.js 18+](https://nodejs.org/) (for Hardhat)
+- Python 3.10+ with project dependencies installed
+
+#### Step 1 – Install Hardhat and start a local node
+
+```powershell
+# Windows PowerShell  (use bash equivalents on Linux/macOS)
+cd blockchain
+npm install
+npx hardhat node
+```
+
+Leave this terminal open. Hardhat prints 20 funded accounts with their private keys –
+no configuration needed, the Python code uses the default keys automatically.
+
+#### Step 2 – Run training with blockchain (new PowerShell window)
+
+```powershell
+cd src
+python demo_rag_vfl_with_zip.py --datapath .\data --use-rag --withblockchain --model-type vit_small --num-epochs 5
+```
+
+#### What proves it's real
+
+When blockchain is active the script prints on every epoch:
+
+```
+  [Chain] Last agg tx  : 0x8af23c4e1d2b9f0a...
+  [Chain] Block number : 14
+```
+
+- The **tx hash** (starting `0x`, 66 hex chars) can be verified in the Hardhat terminal.
+- The **block number** increments with each training epoch, confirming new blocks are mined.
+
+#### Optional – custom private key
+
+Copy any private key printed by `npx hardhat node` and set it before running:
+
+```powershell
+# Windows PowerShell
+$env:BLOCKCHAIN_PRIVATE_KEY = "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
+```
+
+```bash
+# Linux / macOS
+export BLOCKCHAIN_PRIVATE_KEY=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
+```
+
+#### Optional – deploy contract manually, then attach
+
+```powershell
+# (with Hardhat node running in another terminal)
+cd blockchain
+npx hardhat run scripts/deploy.js --network localhost
+# The script prints: Set AGGREGATOR_CONTRACT_ADDRESS=0x...
+$env:AGGREGATOR_CONTRACT_ADDRESS = "0x<address printed above>"
+# Now run training – Python will attach to the existing contract
+cd ../src
+python demo_rag_vfl_with_zip.py --datapath .\data --withblockchain
+```
+
+#### Environment variables reference
+
+| Variable | Default | Description |
+|---|---|---|
+| `WEB3_PROVIDER_URI` | `http://127.0.0.1:8545` | JSON-RPC endpoint of the Ethereum node |
+| `CHAIN_ID` | `31337` | EVM chain ID (Hardhat default) |
+| `BLOCKCHAIN_PRIVATE_KEY` | Hardhat account #0 | Signer key for client 0 / deployer |
+| `BLOCKCHAIN_PRIVATE_KEY_<N>` | Hardhat account #N | Signer key for client N (0-indexed) |
+| `AGGREGATOR_CONTRACT_ADDRESS` | *(not set – deploy fresh)* | Attach to an already-deployed contract |
+
+### 🛠️ Ganache Setup (Legacy / Optional)
 
 To view **real blockchain data** instead of mock data:
 

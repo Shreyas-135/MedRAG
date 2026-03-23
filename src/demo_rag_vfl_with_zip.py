@@ -394,13 +394,26 @@ def main():
     blockchain_vfl_integrator = None
     if args.withblockchain:
         if not BLOCKCHAIN_AVAILABLE:
-            print("Error: Blockchain requested but not available. Running without blockchain.")
+            print("Error: Blockchain requested but not available.")
+            print("  Install required packages: pip install web3 eth-account")
             args.withblockchain = False
         else:
             repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
             CONTRACT_SOURCE = os.path.join(repo_root, "src", "Aggregator.sol")
-            blockchain_vfl_integrator = BlockchainVFLIntegrator(4, CONTRACT_SOURCE)
-            print("✓ Blockchain integration initialized")
+            try:
+                blockchain_vfl_integrator = BlockchainVFLIntegrator(4, CONTRACT_SOURCE)
+                print("✓ Blockchain integration initialized")
+                print(f"  Provider URI : {blockchain_vfl_integrator.provider_uri}")
+                print(f"  Chain ID     : {blockchain_vfl_integrator.chain_id}")
+                print(f"  Contract     : {blockchain_vfl_integrator.contract_address}")
+            except ConnectionError as e:
+                print(str(e))
+                print("  Disabling blockchain for this run.")
+                args.withblockchain = False
+            except Exception as e:
+                print(f"  Blockchain initialization failed: {type(e).__name__}: {e}")
+                print("  Disabling blockchain for this run.")
+                args.withblockchain = False
     
     # Parameters
     num_clients = 4
@@ -604,6 +617,11 @@ def main():
             print(f'Val Loss: {val_loss:.2f} | Val Acc: {val_accuracy:.2f}%')
             print(f'Test Loss: {test_loss:.2f} | Test Acc: {test_accuracy:.2f}%')
             
+            # Log real blockchain tx from the most recent aggregation in this epoch
+            if args.withblockchain and blockchain_vfl_integrator and blockchain_vfl_integrator.last_tx_hash:
+                print(f'  [Chain] Last agg tx  : {blockchain_vfl_integrator.last_tx_hash}')
+                print(f'  [Chain] Block number : {blockchain_vfl_integrator.last_block_number}')
+            
             # Save model checkpoint
             metrics = {
                 'val_accuracy': float(val_accuracy),
@@ -639,10 +657,8 @@ def main():
             
             blockchain_tx_hash = None
             if args.withblockchain and blockchain_vfl_integrator:
-                # Simulated blockchain transaction hash for demo purposes
-                # In production, this would be the actual blockchain transaction hash
-                # returned from the smart contract after weight aggregation
-                blockchain_tx_hash = "sim_0x" + model_hash[:16]  # Demo/simulation only
+                # Use the real on-chain tx hash from the last aggregation this epoch
+                blockchain_tx_hash = blockchain_vfl_integrator.last_tx_hash
             
             ledger.log_training_round(
                 round_num=epoch + 1,
