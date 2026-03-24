@@ -15,6 +15,7 @@ import os
 from pathlib import Path
 from PIL import Image
 import time
+import pandas as pd
 
 # Add parent directory to path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
@@ -151,7 +152,8 @@ with col2:
             else:
                 # Run inference
                 with st.spinner("Analyzing X-ray image..."):
-                    result = inference.predict(str(temp_path), return_explanations=True)
+                    result = inference.predict(str(temp_path), return_explanations=True,
+                                               use_llm_explanation=True)
                 
                 # Log access to ledger
                 ledger = get_ledger()
@@ -182,13 +184,13 @@ with col2:
                 
                 # Probabilities
                 st.markdown("### 📊 Class Probabilities")
-                col_prob1, col_prob2 = st.columns(2)
                 
                 probabilities = result['probabilities']
-                with col_prob1:
-                    st.metric("Normal", f"{probabilities['Normal']:.1%}")
-                with col_prob2:
-                    st.metric("COVID-19", f"{probabilities['COVID-19']:.1%}")
+                # Display all class probabilities (supports binary and multi-class)
+                prob_cols = st.columns(max(2, len(probabilities)))
+                for col, (class_name, prob) in zip(prob_cols, probabilities.items()):
+                    with col:
+                        st.metric(class_name, f"{prob:.1%}")
                 
                 st.markdown("---")
                 
@@ -205,23 +207,19 @@ with col2:
                 
                 with col_right:
                     st.markdown("#### 🧠 RAG Enhancement")
-                    st.info("**Knowledge Base Retrievals:** 3")
-                    
-                    with st.expander("📚 View Retrieved Medical Knowledge"):
-                        st.markdown("""
-                        **Retrieved Cases:**
-                        
-                        1. **COVID-19 Pattern: Bilateral ground-glass opacities**  
-                           Similarity: 94%
-                        
-                        2. **WHO diagnostic criteria matched**  
-                           Similarity: 89%
-                        
-                        3. **Clinical Study: Similar presentation**  
-                           Similarity: 87%
-                        """)
-                    
-                    st.metric("Confidence Boost from RAG", "+12.3%")
+                    _explanations = result.get('explanations') or []
+                    if _explanations:
+                        st.info(f"**Knowledge Base Retrievals:** {len(_explanations)}")
+                        with st.expander("📚 View Retrieved Medical Knowledge"):
+                            for idx, explanation in enumerate(_explanations, 1):
+                                st.markdown(
+                                    f"**{idx}. {explanation.get('condition', 'Finding')}**  \n"
+                                    f"Severity: {explanation.get('severity', 'N/A')}  \n"
+                                    f"Similarity: {explanation.get('similarity', 0):.0%}  \n"
+                                    f"{explanation.get('text', '')}"
+                                )
+                    else:
+                        st.info("No RAG retrievals available for this model.")
                 
                 st.markdown("---")
                 
@@ -526,6 +524,18 @@ Waiting for signature…
                             st.markdown(f"**Description:** {exp['text']}")
                 else:
                     display_info_message("RAG explanations not available for this model")
+
+                # LLM-generated RAG explanation (requires LangChain)
+                if result.get('rag_explanation'):
+                    st.markdown("### 💬 LLM-Generated Explanation")
+                    st.markdown(result['rag_explanation'])
+                    _citations = result.get('citations') or []
+                    if _citations:
+                        st.markdown("**📚 Citations:**")
+                        for citation in _citations:
+                            st.markdown(f"- {citation}")
+                else:
+                    st.info("ℹ️ LLM explanation not available – LangChain is not installed or not enabled.")
 
                 st.markdown("---")
 

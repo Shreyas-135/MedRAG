@@ -29,6 +29,12 @@ import os
 import traceback
 
 try:
+    from sklearn.metrics import precision_score, recall_score, f1_score
+    SKLEARN_AVAILABLE = True
+except ImportError:
+    SKLEARN_AVAILABLE = False
+
+try:
     # Try to import YOLO-enhanced models first
     from models_with_yolo import create_client_model, get_model_info, compare_models
     YOLO_MODELS_AVAILABLE = True
@@ -246,7 +252,7 @@ def evaluate(models, val_loaders, test_loaders, criterion, num_clients,
         ledger: Ledger instance for logging (optional)
         
     Returns:
-        Tuple of (accuracy, loss)
+        Tuple of (accuracy, loss, precision, recall, f1)
     """
     # Log access at start of evaluation
     if ledger:
@@ -273,6 +279,8 @@ def evaluate(models, val_loaders, test_loaders, criterion, num_clients,
     correct = 0
     total_loss = 0
     n = 0
+    all_targets = []
+    all_predicted = []
     
     while not completed:
         # Generate embeddings
@@ -322,10 +330,21 @@ def evaluate(models, val_loaders, test_loaders, criterion, num_clients,
         total += targets.size(0)
         total_loss += loss.item()
         n += 1
+        all_targets.extend(targets.cpu().tolist())
+        all_predicted.extend(predicted.cpu().tolist())
     
     del data_iterators
     accuracy = 100 * correct / total
     loss = total_loss / n
+
+    # Compute precision / recall / F1
+    precision = recall = f1 = 0.0
+    if SKLEARN_AVAILABLE and all_targets:
+        num_unique = len(set(all_targets))
+        avg = 'binary' if num_unique <= 2 else 'macro'
+        precision = float(precision_score(all_targets, all_predicted, average=avg, zero_division=0))
+        recall    = float(recall_score(   all_targets, all_predicted, average=avg, zero_division=0))
+        f1        = float(f1_score(       all_targets, all_predicted, average=avg, zero_division=0))
     
     # Log successful evaluation
     if ledger:
@@ -334,10 +353,11 @@ def evaluate(models, val_loaders, test_loaders, criterion, num_clients,
             action="evaluate",
             resource=f"{mode}_data",
             status="success",
-            details={"mode": mode, "accuracy": float(accuracy), "loss": float(loss)}
+            details={"mode": mode, "accuracy": float(accuracy), "loss": float(loss),
+                     "precision": precision, "recall": recall, "f1": f1}
         )
     
-    return (accuracy, loss)
+    return (accuracy, loss, precision, recall, f1)
 
 
 def main():
@@ -602,20 +622,20 @@ def main():
                   num_clients, theta, quant_bin, blockchain_vfl_integrator,
                   server_model, args, ledger=ledger, epoch_num=epoch)
             
-            val_accuracy, val_loss = evaluate(
+            val_accuracy, val_loss, val_precision, val_recall, val_f1 = evaluate(
                 models, val_loaders, test_loaders, criterion, num_clients,
                 theta, quant_bin, blockchain_vfl_integrator, server_model, 
                 args, mode='validation', ledger=ledger
             )
-            test_accuracy, test_loss = evaluate(
+            test_accuracy, test_loss, test_precision, test_recall, test_f1 = evaluate(
                 models, val_loaders, test_loaders, criterion, num_clients,
                 theta, quant_bin, blockchain_vfl_integrator, server_model,
                 args, mode='test', ledger=ledger
             )
             
             print(f'Time: {time.time() - start:.2f}s')
-            print(f'Val Loss: {val_loss:.2f} | Val Acc: {val_accuracy:.2f}%')
-            print(f'Test Loss: {test_loss:.2f} | Test Acc: {test_accuracy:.2f}%')
+            print(f'Val  Loss: {val_loss:.2f} | Val  Acc: {val_accuracy:.2f}% | Val  P: {val_precision:.3f} | Val  R: {val_recall:.3f} | Val  F1: {val_f1:.3f}')
+            print(f'Test Loss: {test_loss:.2f} | Test Acc: {test_accuracy:.2f}% | Test P: {test_precision:.3f} | Test R: {test_recall:.3f} | Test F1: {test_f1:.3f}')
             
             # Log real blockchain tx from the most recent aggregation in this epoch
             if args.withblockchain and blockchain_vfl_integrator and blockchain_vfl_integrator.last_tx_hash:
@@ -626,8 +646,14 @@ def main():
             metrics = {
                 'val_accuracy': float(val_accuracy),
                 'val_loss': float(val_loss),
+                'val_precision': val_precision,
+                'val_recall': val_recall,
+                'val_f1': val_f1,
                 'test_accuracy': float(test_accuracy),
-                'test_loss': float(test_loss)
+                'test_loss': float(test_loss),
+                'test_precision': test_precision,
+                'test_recall': test_recall,
+                'test_f1': test_f1,
             }
             config = {
                 'theta': theta,
