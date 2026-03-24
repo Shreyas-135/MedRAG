@@ -51,11 +51,24 @@ def get_inference_engine(_version_id=None):
             version = registry.get_version(_version_id)
             if version:
                 checkpoint_path = version.checkpoint_path
-        
+
+        # Allow the dataset directory to be supplied via env var so that
+        # load_inference_model can auto-detect class names when the
+        # checkpoint does not contain class metadata.
+        repo_root = Path(__file__).parent.parent
+        dataset_dir = os.environ.get(
+            'MEDRAG_DATASET_DIR',
+            str(repo_root / 'data')
+        )
+        # Only pass dataset_dir if the directory actually exists
+        if not os.path.isdir(dataset_dir):
+            dataset_dir = None
+
         inference = load_inference_model(
             checkpoint_path=checkpoint_path,
             use_rag=True,
-            num_clients=4
+            num_clients=4,
+            dataset_dir=dataset_dir,
         )
         return inference
     except Exception as e:
