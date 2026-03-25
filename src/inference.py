@@ -12,7 +12,7 @@ import os
 from typing import Dict, List, Tuple, Optional, Any
 import time
 
-from models import ClientModel2Layers
+from models import ClientModel2Layers, create_client_model
 from rag_server_model import RAGEnhancedServerModel
 
 
@@ -20,8 +20,14 @@ def detect_class_names_from_dir(dataset_dir: str):
     """
     Auto-detect class names from a dataset directory.
 
-    Checks ``<dataset_dir>/SplitCovid19/hospitalA/train`` first (new naming),
-    then ``<dataset_dir>/SplitCovid19/client0/train`` (legacy naming).
+    Checks the following locations in order (supports both the case where
+    ``dataset_dir`` is the *parent* of ``SplitCovid19`` and the case where
+    ``dataset_dir`` IS the ``SplitCovid19`` directory itself):
+
+    1. ``<dataset_dir>/SplitCovid19/hospitalA/train``
+    2. ``<dataset_dir>/SplitCovid19/client0/train``
+    3. ``<dataset_dir>/hospitalA/train``  (dataset_dir == SplitCovid19)
+    4. ``<dataset_dir>/client0/train``    (dataset_dir == SplitCovid19)
 
     Args:
         dataset_dir: Root directory of the dataset
@@ -29,16 +35,20 @@ def detect_class_names_from_dir(dataset_dir: str):
     Returns:
         Sorted list of class names, or ``None`` if detection fails.
     """
-    split_base = os.path.join(dataset_dir, 'SplitCovid19')
-    for candidate in ['hospitalA', 'client0']:
-        train_dir = os.path.join(split_base, candidate, 'train')
-        if os.path.isdir(train_dir):
-            classes = sorted([
-                d for d in os.listdir(train_dir)
-                if os.path.isdir(os.path.join(train_dir, d))
-            ])
-            if classes:
-                return classes
+    candidate_roots = [
+        os.path.join(dataset_dir, 'SplitCovid19'),  # parent dir supplied
+        dataset_dir,                                  # SplitCovid19 itself supplied
+    ]
+    for split_base in candidate_roots:
+        for candidate in ['hospitalA', 'client0']:
+            train_dir = os.path.join(split_base, candidate, 'train')
+            if os.path.isdir(train_dir):
+                classes = sorted([
+                    d for d in os.listdir(train_dir)
+                    if os.path.isdir(os.path.join(train_dir, d))
+                ])
+                if classes:
+                    return classes
     return None
 
 
@@ -76,10 +86,14 @@ class MedRAGInference:
             model.eval()
         self.server_model.eval()
         
-        # Image preprocessing
+        # Image preprocessing (ImageNet normalization matches pretrained backbones)
         self.transform = transforms.Compose([
             transforms.Resize((224, 224)),
             transforms.ToTensor(),
+            transforms.Normalize(
+                mean=[0.485, 0.456, 0.406],
+                std=[0.229, 0.224, 0.225],
+            ),
         ])
     
     def preprocess_image(self, image_path: str) -> torch.Tensor:
@@ -211,7 +225,8 @@ class MedRAGInference:
                 for class_name, prob in zip(self.class_names, probabilities)
             },
             'inference_time': time.time() - start_time,
-            'model_type': 'RAG-Enhanced VFL' if self.server_model.use_rag else 'Standard VFL'
+            'model_type': 'RAG-Enhanced VFL' if self.server_model.use_rag else 'Standard VFL',
+            'server_model_use_rag': bool(self.server_model.use_rag),
         }
         
         if return_explanations:
@@ -224,7 +239,8 @@ class MedRAGInference:
                 llm_result = self.server_model.explain_prediction(
                     embeddings, 
                     predicted_idx.item(), 
-                    confidence.item()
+                    confidence.item(),
+                    class_names=self.class_names
                 )
                 if llm_result:
                     result['rag_explanation'] = llm_result.get('rag_explanation', '')
@@ -312,6 +328,7 @@ def load_inference_model(checkpoint_path: str = None,
     # Priority: explicit argument > checkpoint metadata > dataset_dir detection > default
     resolved_class_names = None
     resolved_num_classes = 2
+    resolved_model_type = 'resnet_vgg'
 
     # Load checkpoint if provided (read metadata first)
     checkpoint = None
@@ -320,6 +337,7 @@ def load_inference_model(checkpoint_path: str = None,
         if 'config' in checkpoint:
             resolved_num_classes = checkpoint['config'].get('num_classes', 2)
             resolved_class_names = checkpoint['config'].get('class_names', None)
+            resolved_model_type = checkpoint['config'].get('model_type', 'resnet_vgg')
 
     # Explicit argument overrides checkpoint metadata
     if class_names is not None:
@@ -338,12 +356,24 @@ def load_inference_model(checkpoint_path: str = None,
         resolved_class_names = ['Normal', 'COVID-19']
         resolved_num_classes = 2
 
-    # Initialize client models
+    # Defensive: ensure num_classes stays consistent with class_names list
+    if len(resolved_class_names) != resolved_num_classes:
+        resolved_num_classes = len(resolved_class_names)
+
+    # Initialize client models using the same architecture as training
     client_models = []
-    for _ in range(num_clients):
-        model = ClientModel2Layers()
-        model.eval()
-        client_models.append(model)
+    try:
+        for _ in range(num_clients):
+            model = create_client_model(model_type=resolved_model_type)
+            model.eval()
+            client_models.append(model)
+    except Exception:
+        # Fall back to default 2-layer model if factory fails
+        client_models = []
+        for _ in range(num_clients):
+            model = ClientModel2Layers()
+            model.eval()
+            client_models.append(model)
     
     # Initialize server model
     server_model = RAGEnhancedServerModel(

@@ -219,7 +219,11 @@ with col2:
                                     f"{explanation.get('text', '')}"
                                 )
                     else:
-                        st.info("No RAG retrievals available for this model.")
+                        _sm = result.get('server_model_use_rag', None)
+                        if _sm is False:
+                            st.info("ℹ️ RAG is disabled for this model.")
+                        else:
+                            st.warning("⚠️ No RAG retrievals returned — knowledge base may be empty or RAG module unavailable.")
                 
                 st.markdown("---")
                 

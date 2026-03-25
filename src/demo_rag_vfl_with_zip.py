@@ -366,6 +366,8 @@ def main():
     parser.add_argument('--datasize', default=1.0, type=float, help='Dataset size (0.0125, 0.25, 0.5, or 1.0)')
     parser.add_argument('--theta', default=0.1, type=float, help='Noise value (in range [0, 0.25])')
     parser.add_argument('--withblockchain', action='store_true', help='Use blockchain for aggregation')
+    parser.add_argument('--use-blockchain', dest='withblockchain', action='store_true',
+                        help='Alias for --withblockchain')
     parser.add_argument('--use-rag', action='store_true', help='Enable RAG enhancement (recommended)')
     parser.add_argument('--num-epochs', default=5, type=int, help='Number of training epochs')
     
@@ -664,6 +666,7 @@ def main():
                 'epoch': epoch + 1,
                 'class_names': class_names,
                 'num_classes': num_classes,
+                'model_type': args.model_type,
             }
             
             version_id = model_registry.save_model(

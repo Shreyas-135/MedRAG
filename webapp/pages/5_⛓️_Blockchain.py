@@ -40,11 +40,14 @@ ganache_connected = check_ganache_connection()
 # Connection status
 st.markdown("## 🔗 Connection Status")
 if ganache_connected:
-    st.success("✅ Connected to Ganache - Showing real blockchain data")
+    st.success("✅ Connected to local node - Showing real blockchain data")
     real_blocks = get_ganache_blocks(num_blocks=5)
 else:
-    st.warning("⚠️ Ganache not detected - Showing mock data")
-    st.info("💡 To view real blockchain data, start Ganache. [Setup Guide](../../GANACHE_SETUP.md)")
+    st.warning("⚠️ Local node not detected - Showing mock data")
+    st.info("💡 To view real blockchain data, start a local Ethereum node (Hardhat or Ganache). "
+            "Hardhat: `npx hardhat node` (default http://127.0.0.1:8545). "
+            "Set `WEB3_PROVIDER_URI` if using a non-default URL. "
+            "[Setup Guide](../../GANACHE_SETUP.md)")
     real_blocks = None
 
 if st.button("🔄 Refresh Connection", use_container_width=True):

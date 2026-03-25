@@ -44,15 +44,15 @@ class RAGEnhancedServerModel(nn.Module):
                     print(f"Warning: Could not initialize LangChain RAG: {e}")
                     print("Falling back to simple RAG")
                     self.use_langchain = False
-            
-            if not self.use_langchain:
-                # Initialize simple RAG module
-                self.rag_module = RAGModule(embedding_dim=embedding_dim, num_classes=num_classes)
-                
-                # Initialize with sample medical knowledge
-                # In practice, this would be populated with actual medical data
-                sample_kb = create_sample_xray_knowledge_base()
-                self.rag_module.populate_knowledge_base(sample_kb)
+
+            # Always initialize simple RAG module when use_rag=True.
+            # When LangChain is active the simple module handles the forward
+            # pass and is exposed via get_rag_module() for retrieval.
+            self.rag_module = RAGModule(embedding_dim=embedding_dim, num_classes=num_classes)
+
+            # Populate with sample medical knowledge base at load time.
+            sample_kb = create_sample_xray_knowledge_base()
+            self.rag_module.populate_knowledge_base(sample_kb)
         else:
             # Fallback to standard classification
             self.fc = nn.Sequential(
@@ -107,7 +107,7 @@ class RAGEnhancedServerModel(nn.Module):
     
     def get_rag_module(self):
         """Get the RAG module for external access."""
-        if self.use_rag and not self.use_langchain:
+        if self.use_rag and hasattr(self, 'rag_module'):
             return self.rag_module
         return None
     
@@ -117,14 +117,15 @@ class RAGEnhancedServerModel(nn.Module):
             return self.langchain_pipeline
         return None
     
-    def explain_prediction(self, embedding, prediction, confidence):
+    def explain_prediction(self, embedding, prediction, confidence, class_names=None):
         """
         Generate LLM explanation for a prediction.
         
         Args:
             embedding: Input embedding tensor
-            prediction: Predicted class
+            prediction: Predicted class index
             confidence: Prediction confidence
+            class_names: Optional list of class names (defaults to generic labels)
             
         Returns:
             Explanation dictionary or None
@@ -136,9 +137,11 @@ class RAGEnhancedServerModel(nn.Module):
             if emb_np.ndim > 1:
                 emb_np = emb_np[0]  # Get first sample
             
-            # Query pipeline
-            class_names = ['Normal', 'COVID-19']
-            pred_name = class_names[prediction] if prediction < len(class_names) else str(prediction)
+            # Resolve class name for the predicted index
+            if class_names and prediction < len(class_names):
+                pred_name = class_names[prediction]
+            else:
+                pred_name = str(prediction)
             
             result = self.langchain_pipeline.query(
                 embedding=emb_np,

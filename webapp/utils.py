@@ -188,11 +188,11 @@ def display_warning_message(message):
 
 @st.cache_data(ttl=30)  # Cache for 30 seconds
 def check_ganache_connection():
-    """Check if Ganache is running."""
+    """Check if a local Ethereum node (Hardhat or Ganache) is running."""
     try:
         from web3 import Web3
-        ganache_url = os.getenv('GANACHE_URL', 'http://127.0.0.1:7545')
-        w3 = Web3(Web3.HTTPProvider(ganache_url, request_kwargs={'timeout': 2}))
+        rpc_url = os.getenv('WEB3_PROVIDER_URI') or os.getenv('GANACHE_URL') or 'http://127.0.0.1:8545'
+        w3 = Web3(Web3.HTTPProvider(rpc_url, request_kwargs={'timeout': 2}))
         return w3.is_connected()
     except:
         return False
@@ -200,11 +200,11 @@ def check_ganache_connection():
 
 @st.cache_data(ttl=30)
 def get_ganache_blocks(num_blocks=5):
-    """Fetch recent blocks from Ganache."""
+    """Fetch recent blocks from a local Ethereum node (Hardhat or Ganache)."""
     try:
         from web3 import Web3
-        ganache_url = os.getenv('GANACHE_URL', 'http://127.0.0.1:7545')
-        w3 = Web3(Web3.HTTPProvider(ganache_url, request_kwargs={'timeout': 2}))
+        rpc_url = os.getenv('WEB3_PROVIDER_URI') or os.getenv('GANACHE_URL') or 'http://127.0.0.1:8545'
+        w3 = Web3(Web3.HTTPProvider(rpc_url, request_kwargs={'timeout': 2}))
         
         if not w3.is_connected():
             return None
@@ -239,7 +239,7 @@ def check_model_governance_approval(version_id: str) -> dict:
         ``approval_count`` (int), ``required_approvals`` (int),
         ``mock_mode`` (bool).
     """
-    ganache_url = os.getenv("GANACHE_URL", "http://127.0.0.1:7545")
+    ganache_url = os.getenv("WEB3_PROVIDER_URI") or os.getenv("GANACHE_URL") or "http://127.0.0.1:8545"
     admin_key = os.getenv("GOVERNANCE_ADMIN_KEY", "")
     contract_address = os.getenv("GOVERNANCE_CONTRACT_ADDRESS", "")
 
@@ -281,11 +281,11 @@ def check_model_governance_approval(version_id: str) -> dict:
 
 
 def get_transaction_details(tx_hash):
-    """Get transaction details from Ganache."""
+    """Get transaction details from a local Ethereum node (Hardhat or Ganache)."""
     try:
         from web3 import Web3
-        ganache_url = os.getenv('GANACHE_URL', 'http://127.0.0.1:7545')
-        w3 = Web3(Web3.HTTPProvider(ganache_url, request_kwargs={'timeout': 2}))
+        rpc_url = os.getenv('WEB3_PROVIDER_URI') or os.getenv('GANACHE_URL') or 'http://127.0.0.1:8545'
+        w3 = Web3(Web3.HTTPProvider(rpc_url, request_kwargs={'timeout': 2}))
         
         if not w3.is_connected():
             return None

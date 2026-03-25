@@ -157,13 +157,11 @@ if len(versions) > 1:
     fig.update_layout(
         xaxis=dict(title='Training Round'),
         yaxis=dict(
-            title='Accuracy (%)',
-            titlefont=dict(color='#4CAF50'),
+            title=dict(text='Accuracy (%)', font=dict(color='#4CAF50')),
             tickfont=dict(color='#4CAF50')
         ),
         yaxis2=dict(
-            title='Loss',
-            titlefont=dict(color='#FF5722'),
+            title=dict(text='Loss', font=dict(color='#FF5722')),
             tickfont=dict(color='#FF5722'),
             overlaying='y',
             side='right'
