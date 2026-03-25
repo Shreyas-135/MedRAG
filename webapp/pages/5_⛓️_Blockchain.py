@@ -132,7 +132,7 @@ else:
 st.markdown("### Hospital Contributions")
 
 # Display contributions from each hospital
-hospitals = ["Hospital A (NY)", "Hospital B (Boston)", "Hospital C (Chicago)", "Hospital D (Seattle)"]
+hospitals = ["Hospital A (Chennai)", "Hospital B (Bangalore)", "Hospital C (Hyderabad)", "Hospital D (Mumbai)"]
 
 contributions = []
 for i, hospital in enumerate(hospitals):
@@ -146,64 +146,6 @@ for i, hospital in enumerate(hospitals):
 contributions_df = pd.DataFrame(contributions)
 st.dataframe(contributions_df, use_container_width=True, hide_index=True)
 
-st.markdown("### Smart Contract Aggregation")
-
-st.code(f"""
-// Aggregation Details for Block #{selected_block}
-function aggregateWeights() public {{
-    // Weights from 4 hospitals
-    uint256[] memory weights = [
-        {secrets.randbelow(1000000)},  // Hospital A
-        {secrets.randbelow(1000000)},  // Hospital B
-        {secrets.randbelow(1000000)},  // Hospital C
-        {secrets.randbelow(1000000)}   // Hospital D
-    ];
-    
-    // Compute weighted average
-    uint256 aggregated = computeAverage(weights);
-    
-    // Emit event
-    emit WeightsAggregated(block.number, aggregated);
-}}
-
-Verification: ✅ All signatures valid
-Privacy Budget: ε = 1.0
-""", language="solidity")
-
-st.markdown("---")
-
-# Comparison Section
-st.markdown("## ⚖️ Blockchain Comparison")
-
-col1, col2 = st.columns(2)
-
-with col1:
-    st.markdown("### ❌ Without Blockchain")
-    st.error("""
-    **Drawbacks:**
-    - 🔴 Central server controls aggregation
-    - 🔴 No transparency into process
-    - 🔴 Trust required in coordinator
-    - 🔴 Single point of failure
-    - 🔴 No audit trail
-    - 🔴 Potential for manipulation
-    - 🔴 Cannot verify aggregation fairness
-    """)
-
-with col2:
-    st.markdown("### ✅ With Blockchain")
-    st.success("""
-    **Benefits:**
-    - 🟢 Decentralized aggregation
-    - 🟢 Full transparency for all hospitals
-    - 🟢 Trustless collaboration
-    - 🟢 Distributed and resilient
-    - 🟢 Immutable audit trail
-    - 🟢 Cryptographically verified
-    - 🟢 Fair and verifiable aggregation
-    """)
-
-st.markdown("---")
 
 # Verification Tool
 st.markdown("## 🔐 Transaction Verification Tool")
@@ -225,7 +167,6 @@ if verify_button and tx_hash_input:
     if ganache_connected:
         # Try to get real transaction
         tx_details = get_transaction_details(tx_hash_input)
-        
         if tx_details:
             st.success("✅ Transaction Verified Successfully")
             st.json({
@@ -240,20 +181,6 @@ if verify_button and tx_hash_input:
             })
         else:
             st.error("❌ Transaction not found on blockchain")
-    else:
-        # Mock verification
-        st.success("✅ Transaction Verified Successfully (Mock)")
-        st.json({
-            "hash": tx_hash_input,
-            "from": "0x" + secrets.token_hex(20),
-            "to": "0x" + secrets.token_hex(20),
-            "block_number": 105,
-            "gas_used": 21000,
-            "status": "Success",
-            "verified": True,
-            "timestamp": datetime.now().isoformat(),
-            "note": "Mock verification - Start Ganache for real data"
-        })
 
 st.markdown("---")
 

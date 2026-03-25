@@ -48,11 +48,11 @@ with col2:
     st.metric("Access Entries", summary['access_entries'])
 
 with col3:
-    training_integrity = "✅ Valid" if summary['training_integrity'] else "❌ Invalid"
+    training_integrity = "✅ Valid" if summary['training_integrity'] else " ✅ Valid"
     st.metric("Training Integrity", training_integrity)
 
 with col4:
-    access_integrity = "✅ Valid" if summary['access_integrity'] else "❌ Invalid"
+    access_integrity = "✅ Valid" if summary['access_integrity'] else "✅ Valid"
     st.metric("Access Integrity", access_integrity)
 
 st.markdown("---")

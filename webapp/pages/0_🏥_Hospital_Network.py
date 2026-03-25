@@ -264,29 +264,3 @@ fig.update_layout(
 )
 
 st.plotly_chart(fig, use_container_width=True)
-
-# ============================================================================
-# Federated Learning Info
-# ============================================================================
-
-st.markdown("## 🔐 Federated Learning Architecture")
-
-col1, col2 = st.columns(2)
-
-with col1:
-    st.markdown("""
-    ### Privacy-Preserving Training
-    - ✅ Data remains at each hospital
-    - ✅ Only model weights are shared
-    - ✅ Differential privacy protection
-    - ✅ Encrypted communication channels
-    """)
-
-with col2:
-    st.markdown("""
-    ### Blockchain Integration
-    - ✅ Immutable training records
-    - ✅ Verifiable weight aggregation
-    - ✅ Transparent audit trail
-    - ✅ Smart contract governance
-    """)

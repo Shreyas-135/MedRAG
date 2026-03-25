@@ -156,22 +156,14 @@ if len(versions) > 1:
     
     fig.update_layout(
         xaxis=dict(title='Training Round'),
-        yaxis=dict(
-            title='Accuracy (%)',
-            titlefont=dict(color='#4CAF50'),
-            tickfont=dict(color='#4CAF50')
+        yaxis=dict(title=dict(text='Accuracy (%)', font=dict(color='#4CAF50')),tickfont=dict(color='#4CAF50')
         ),
-        yaxis2=dict(
-            title='Loss',
-            titlefont=dict(color='#FF5722'),
-            tickfont=dict(color='#FF5722'),
-            overlaying='y',
-            side='right'
+        yaxis2=dict(title=dict(text='Loss', font=dict(color='#FF5722')),tickfont=dict(color='#FF5722'),overlaying='y',
+        side='right'
         ),
         hovermode='x unified',
         height=400
     )
-    
     st.plotly_chart(fig, use_container_width=True)
 else:
     st.info("📊 Train more models to see performance trends")

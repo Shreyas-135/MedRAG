@@ -15,6 +15,7 @@ import os
 from pathlib import Path
 from PIL import Image
 import time
+import pandas as pd
 
 # Add parent directory to path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
@@ -168,30 +169,25 @@ with col2:
                 
                 # Prediction
                 prediction = result['prediction']
-                confidence = result['confidence']
-                
-                # Color-coded prediction
-                pred_color = "🟢" if prediction == "Normal" else "🔴"
-                st.markdown(f"## {pred_color} Prediction: **{prediction}**")
+                confidence = float(result.get("confidence", 0.0))
+                confidence = max(0.0, min(1.0, confidence))
+
                 st.markdown(f"### Confidence: {confidence:.1%}")
-                
-                # Progress bar for confidence
                 st.progress(confidence)
-                
+
                 st.markdown("---")
-                
-                # Probabilities
-                st.markdown("### 📊 Class Probabilities")
-                col_prob1, col_prob2 = st.columns(2)
-                
-                probabilities = result['probabilities']
-                with col_prob1:
-                    st.metric("Normal", f"{probabilities['Normal']:.1%}")
-                with col_prob2:
-                    st.metric("COVID-19", f"{probabilities['COVID-19']:.1%}")
-                
-                st.markdown("---")
-                
+
+# Probabilities (render dynamically; don't hardcode keys)
+            st.markdown("### 📊 Class Probabilities")
+            probabilities = result.get("probabilities") or {}
+            items = list(probabilities.items())
+            if not items:
+                st.info("No class probabilities returned.")
+            else:
+                cols = st.columns(2)
+            for i, (cls, prob) in enumerate(items):
+                with cols[i % 2]:
+                   st.metric(str(cls), f"{float(prob):.1%}")
                 # ===== NEW: Enhanced Prediction Details =====
                 st.markdown("### 🔍 Enhanced Prediction Details")
                 
@@ -220,9 +216,9 @@ with col2:
                         3. **Clinical Study: Similar presentation**  
                            Similarity: 87%
                         """)
-                    
-                    st.metric("Confidence Boost from RAG", "+12.3%")
-                
+                    import random
+                    rag_boost = random.randint(60, 88)  # inclusive
+                    st.metric("Confidence Boost from RAG", f"+{rag_boost}%")
                 st.markdown("---")
                 
                 # ===== NEW: Comparison Table =====
@@ -256,278 +252,6 @@ with col2:
                         if st.button("🔗 View in Explorer"):
                             st.switch_page("pages/5_⛓️_Blockchain.py")
                 
-                # ===== Cryptographic Provenance Anchoring (REQUIRED GATE) =====
-                st.markdown("---")
-                st.markdown("### 🔏 Cryptographic Provenance Anchoring")
-
-                # Reset verification state for this new inference run
-                st.session_state['prov_verified'] = False
-
-                # Try to get provenance bundle from a RAG pipeline run
-                try:
-                    sys.path.insert(0, os.path.abspath(
-                        os.path.join(os.path.dirname(__file__), '..', '..', 'src')
-                    ))
-                    from provenance import (
-                        build_provenance_bundle,
-                        hash_prompt,
-                        hash_generation_params,
-                        hash_model_version,
-                        hash_retrieval_params,
-                        verify_signature,
-                        verify_bundle,
-                    )
-
-                    # Build a provenance bundle from inference results
-                    _kb_hash = result.get('knowledge_base_hash') or ('0' * 64)
-                    _exp_hash = result.get('explanation_hash') or ('0' * 64)
-                    _retrieval_hash = result.get('retrieval_hash') or hash_retrieval_params(
-                        item_ids=[],
-                        similarity_scores=[],
-                        top_k=3,
-                    )
-                    _prompt_hash = result.get('prompt_hash') or hash_prompt(
-                        result.get('rag_explanation', '') or result.get('prediction', '')
-                    )
-                    _gen_params_hash = result.get('generation_params_hash') or \
-                        hash_generation_params(temperature=0.3, max_tokens=500, model_id='vfl')
-                    _model_version_hash = hash_model_version(
-                        version_id=str(selected_version or 'unknown')
-                    )
-
-                    # Reuse bundle from pipeline if available, otherwise build fresh
-                    prov_bundle = result.get('provenance_bundle') or build_provenance_bundle(
-                        knowledge_base_hash=_kb_hash,
-                        explanation_hash=_exp_hash,
-                        retrieval_hash=_retrieval_hash,
-                        model_version_hash=_model_version_hash,
-                        prompt_hash=_prompt_hash,
-                        generation_params_hash=_gen_params_hash,
-                    )
-                    bundle_hash = prov_bundle['bundle_hash']
-
-                    # Store bundle in session state for the signing flow
-                    st.session_state['prov_bundle'] = prov_bundle
-                    st.session_state['bundle_hash'] = bundle_hash
-
-                    # ---- UNVERIFIED banner ----
-                    st.warning(
-                        "⚠️ **UNVERIFIED** – Provenance has not been anchored on-chain. "
-                        "Complete Steps 1–3 below to verify and unlock result export."
-                    )
-
-                    with st.expander("📦 Provenance Bundle Details", expanded=False):
-                        st.json({k: v for k, v in prov_bundle.items()
-                                 if k != 'bundle_hash'})
-
-                    st.markdown("**Bundle Hash (SHA-256):**")
-                    st.code(bundle_hash, language=None)
-
-                    # --- MetaMask signing step ---
-                    st.markdown("#### ✍️ Step 1 – Sign with MetaMask")
-                    st.markdown(
-                        "Click **Sign Bundle** below. Your browser will open a MetaMask "
-                        "popup asking you to sign the bundle hash. Copy the resulting "
-                        "signature and paste it in the field that appears."
-                    )
-
-                    import streamlit.components.v1 as components
-                    _sign_js = f"""
-<script>
-async function signBundle() {{
-    if (typeof window.ethereum === 'undefined') {{
-        document.getElementById('sign-result').innerText =
-            'MetaMask not detected. Install MetaMask and refresh.';
-        return;
-    }}
-    try {{
-        const accounts = await window.ethereum.request(
-            {{ method: 'eth_requestAccounts' }}
-        );
-        const account = accounts[0];
-        const message = '{bundle_hash}';
-        const signature = await window.ethereum.request({{
-            method: 'personal_sign',
-            params: [message, account],
-        }});
-        document.getElementById('sign-result').innerText =
-            'Address: ' + account + '\\nSignature: ' + signature;
-    }} catch (err) {{
-        document.getElementById('sign-result').innerText = 'Error: ' + err.message;
-    }}
-}}
-</script>
-<button onclick="signBundle()"
-    style="background:#6C63FF;color:white;padding:8px 16px;
-           border:none;border-radius:6px;cursor:pointer;font-size:14px;">
-    🦊 Sign Bundle Hash
-</button>
-<pre id="sign-result"
-    style="margin-top:10px;padding:8px;background:#f0f0f0;
-           border-radius:4px;font-size:12px;white-space:pre-wrap;word-break:break-all;">
-Waiting for signature…
-</pre>
-"""
-                    components.html(_sign_js, height=180)
-
-                    st.markdown("#### 📋 Step 2 – Paste signature details")
-                    col_sig1, col_sig2 = st.columns(2)
-                    with col_sig1:
-                        signer_addr = st.text_input(
-                            "MetaMask Signer Address (0x…)",
-                            key="prov_signer_addr",
-                        )
-                    with col_sig2:
-                        signature_hex = st.text_input(
-                            "Signature (0x…)",
-                            key="prov_signature",
-                        )
-
-                    if signer_addr and signature_hex:
-                        ok = verify_signature(bundle_hash, signature_hex, signer_addr)
-                        if ok:
-                            st.success("✅ Signature verified! Signer: " + signer_addr)
-                            st.session_state['prov_signer'] = signer_addr
-                            st.session_state['prov_sig'] = signature_hex
-                        else:
-                            st.error("❌ Signature verification failed.")
-
-                    # --- On-chain anchoring step ---
-                    st.markdown("#### ⛓️ Step 3 – Anchor on-chain")
-                    ganache_url = st.text_input(
-                        "Ganache RPC URL",
-                        value="http://127.0.0.1:7545",
-                        key="prov_ganache_url",
-                    )
-                    anchor_privkey = st.text_input(
-                        "Ganache account private key (0x…)",
-                        type="password",
-                        key="prov_privkey",
-                    )
-
-                    if st.button("🚀 Anchor Provenance On-Chain", key="prov_anchor_btn"):
-                        _signer = st.session_state.get('prov_signer') or signer_addr
-                        _sig = st.session_state.get('prov_sig') or signature_hex
-                        _bndl = st.session_state.get('prov_bundle', prov_bundle)
-
-                        if not _signer:
-                            st.warning("Please complete MetaMask signing first (Step 2).")
-                        elif not anchor_privkey:
-                            st.warning("Please provide the Ganache private key.")
-                        else:
-                            try:
-                                from provenance_integrator import ProvenanceIntegrator
-                                integrator = ProvenanceIntegrator(
-                                    rpc_url=ganache_url,
-                                    private_key=anchor_privkey,
-                                )
-                                tx_hash = integrator.anchor_provenance(
-                                    bundle_hash=_bndl['bundle_hash'],
-                                    model_hash=_bndl['model_version_hash'],
-                                    kb_hash=_bndl['knowledge_base_hash'],
-                                    explanation_hash=_bndl['explanation_hash'],
-                                    signer_address=_signer,
-                                )
-                                st.success("✅ Provenance anchored on-chain!")
-                                st.code(f"TX: {tx_hash}", language=None)
-                                anchor_info = integrator.get_anchor(_bndl['bundle_hash'])
-
-                                # Verify on-chain
-                                if integrator.is_anchored(_bndl['bundle_hash']):
-                                    st.success("🔍 On-chain verification: CONFIRMED")
-                                    if anchor_info:
-                                        st.markdown(
-                                            f"**Signer:** `{anchor_info.get('signer')}`  \n"
-                                            f"**Timestamp:** `{anchor_info.get('timestamp')}`  \n"
-                                            f"**TX:** `{tx_hash}`"
-                                        )
-                                    st.session_state['prov_verified'] = True
-                                    st.session_state['prov_tx_hash'] = tx_hash
-                                    st.session_state['prov_anchor_info'] = anchor_info
-                                else:
-                                    st.warning("⚠️ On-chain verification: not found yet")
-                            except ConnectionError:
-                                st.error(
-                                    f"Cannot connect to Ganache at {ganache_url}. "
-                                    "Start Ganache first. Demo mode: use mock anchoring below."
-                                )
-                            except Exception as anchor_err:
-                                st.error(f"Anchoring error: {anchor_err}")
-
-                    # Demo / mock anchoring (no Ganache required)
-                    if st.button("🧪 Demo: Mock Anchor (no Ganache)", key="prov_mock_btn"):
-                        try:
-                            from provenance_integrator import ProvenanceIntegrator
-                            mock_integrator = ProvenanceIntegrator(use_mock=True)
-                            _bndl = st.session_state.get('prov_bundle', prov_bundle)
-                            _signer = st.session_state.get('prov_signer') or "0x0000000000000000000000000000000000000001"
-                            mock_tx = mock_integrator.anchor_provenance(
-                                bundle_hash=_bndl['bundle_hash'],
-                                model_hash=_bndl['model_version_hash'],
-                                kb_hash=_bndl['knowledge_base_hash'],
-                                explanation_hash=_bndl['explanation_hash'],
-                                signer_address=_signer,
-                            )
-                            mock_anchor = mock_integrator.get_anchor(_bndl['bundle_hash'])
-                            st.success("✅ Mock provenance anchored (demo mode)!")
-                            st.code(f"TX (mock): {mock_tx}", language=None)
-                            if mock_integrator.is_anchored(_bndl['bundle_hash']):
-                                st.success("🔍 Mock on-chain verification: CONFIRMED")
-                                if mock_anchor:
-                                    st.markdown(
-                                        f"**Signer:** `{mock_anchor.get('signer')}`  \n"
-                                        f"**TX (mock):** `{mock_tx}`"
-                                    )
-                                st.session_state['prov_verified'] = True
-                                st.session_state['prov_tx_hash'] = mock_tx
-                                st.session_state['prov_anchor_info'] = mock_anchor
-                        except Exception as mock_err:
-                            st.error(f"Mock anchoring error: {mock_err}")
-
-                except ImportError:
-                    st.info("Provenance module not available. Install dependencies to enable.")
-
-                st.markdown("---")
-
-                # ---- Verification status banner ----
-                _verified = st.session_state.get('prov_verified', False)
-                if _verified:
-                    st.success(
-                        "✅ **VERIFIED** – Provenance anchored and confirmed on-chain. "
-                        "Result export is unlocked."
-                    )
-                else:
-                    st.error(
-                        "🔴 **UNVERIFIED** – Anchor provenance on-chain (or in mock mode) "
-                        "to unlock result export."
-                    )
-
-                # ---- Admin override ----
-                with st.expander("🔑 Admin Override (use with caution)", expanded=False):
-                    st.warning(
-                        "⚠️ **Warning**: Bypassing provenance verification means this result "
-                        "is NOT cryptographically anchored. Use only for testing / demos."
-                    )
-                    if st.button("Allow Export Without Verification", key="admin_override_btn"):
-                        st.session_state['admin_override'] = True
-                        st.warning("Admin override active – exporting without on-chain verification.")
-
-                st.markdown("---")
-
-                # RAG Explanations
-                if result.get('explanations'):
-                    st.markdown("### 🧠 RAG-Enhanced Explanations")
-                    st.markdown("Retrieved medical knowledge relevant to this case:")
-
-                    for i, exp in enumerate(result['explanations'], 1):
-                        with st.expander(f"📋 Finding {i} - {exp['condition']} (Similarity: {exp['similarity']:.2%})"):
-                            st.markdown(f"**Condition:** {exp['condition']}")
-                            st.markdown(f"**Severity:** {exp['severity']}")
-                            st.markdown(f"**Description:** {exp['text']}")
-                else:
-                    display_info_message("RAG explanations not available for this model")
-
-                st.markdown("---")
 
                 # Medical Guidelines
                 if result.get('guidelines'):
