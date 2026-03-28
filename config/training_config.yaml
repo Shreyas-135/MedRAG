@@ -2,6 +2,7 @@ training:
   epochs: 12
   batch_size: 32
   learning_rate: 0.001
+  weight_decay: 0.0001
   early_stopping_patience: 5
   num_workers: 0
 
@@ -32,7 +33,6 @@ dataset:
 vfl:
   embedding_dim: 512
   num_partitions: 4
-  partition_dim: 128
   top_model_hidden: 256
 
 outputs:

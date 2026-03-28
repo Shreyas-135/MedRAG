@@ -50,6 +50,9 @@ from tqdm import tqdm
 # Add src directory to path so sibling modules are importable
 sys.path.insert(0, os.path.dirname(__file__))
 
+# Pixels added on each side before random crop during training augmentation
+_RESIZE_PADDING = 32
+
 from vfl_feature_partition import VFLFramework
 
 
@@ -59,7 +62,7 @@ def get_transforms(image_size: int = 224, train: bool = True):
     """Return image transforms for training or evaluation."""
     if train:
         return transforms.Compose([
-            transforms.Resize((image_size + 32, image_size + 32)),
+            transforms.Resize((image_size + _RESIZE_PADDING, image_size + _RESIZE_PADDING)),
             transforms.RandomCrop(image_size),
             transforms.RandomHorizontalFlip(),
             transforms.RandomRotation(10),
@@ -465,7 +468,11 @@ def train_model(
     ).to(device)
 
     criterion = nn.CrossEntropyLoss()
-    optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=1e-4)
+    optimizer = torch.optim.Adam(
+        model.parameters(),
+        lr=lr,
+        weight_decay=train_cfg.get("weight_decay", 1e-4),
+    )
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=n_epochs)
 
     history = {
