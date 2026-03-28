@@ -50,8 +50,8 @@ from tqdm import tqdm
 # Add src directory to path so sibling modules are importable
 sys.path.insert(0, os.path.dirname(__file__))
 
-# Pixels added on each side before random crop during training augmentation
-_RESIZE_PADDING = 32
+# Extra pixels added to each side before random crop (total padding = 2 × this value)
+RESIZE_PADDING_PER_SIDE = 32
 
 from vfl_feature_partition import VFLFramework
 
@@ -62,7 +62,7 @@ def get_transforms(image_size: int = 224, train: bool = True):
     """Return image transforms for training or evaluation."""
     if train:
         return transforms.Compose([
-            transforms.Resize((image_size + _RESIZE_PADDING, image_size + _RESIZE_PADDING)),
+            transforms.Resize((image_size + RESIZE_PADDING_PER_SIDE, image_size + RESIZE_PADDING_PER_SIDE)),
             transforms.RandomCrop(image_size),
             transforms.RandomHorizontalFlip(),
             transforms.RandomRotation(10),
@@ -587,7 +587,7 @@ def run_pipeline(cfg: Dict, use_blockchain: bool = False):
     print(f"  Classes: {class_names}")
     print(f"  Clients: {clients}")
 
-    # Optionally initialise blockchain ledger
+    # Optionally initialize blockchain ledger
     ledger = None
     if use_blockchain:
         try:
