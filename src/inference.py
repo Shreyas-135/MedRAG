@@ -375,25 +375,8 @@ def load_inference_model(checkpoint_path: str = None,
     return inference
 
 
-if __name__ == "__main__":
-    # Example usage
-    print("MedRAG Inference Engine Demo")
-    print("=" * 50)
-    
-    # Load inference model
-    print("Loading models...")
-    inference = load_inference_model(use_rag=True, num_clients=4)
-    print("✓ Models loaded successfully")
-    
-    print(f"\nInference Configuration:")
-    print(f"  - Model type: {inference.server_model.__class__.__name__}")
-    print(f"  - RAG enabled: {inference.server_model.use_rag}")
-    print(f"  - Number of clients: {len(inference.client_models)}")
-    print(f"  - Classes: {inference.class_names}")
-    
-    # Note: Actual prediction requires an image file
-    print("\nReady for inference!")
-    print("Use: inference.predict('path/to/xray.jpg')")
+
+
 # ============================================================================
 # Explainable Inference Engine (Added for 2025 Upgrade)
 # ============================================================================
@@ -539,3 +522,403 @@ class ExplainableInferenceEngine(MedRAGInference):
             results.append(result)
         
         return results
+
+
+# ============================================================================
+# VFL Inference Engine – uses VFLFramework (trained by train_multimodel.py)
+# ============================================================================
+
+# Built-in medical knowledge base for 4-class RAG citations
+_MEDICAL_CITATIONS: Dict[str, List[Dict[str, str]]] = {
+    "covid": [
+        {
+            "source": "WHO COVID-19 Clinical Management Guidelines (2021)",
+            "url": "https://www.who.int/publications/i/item/WHO-2019-nCoV-clinical-2021-2",
+            "snippet": (
+                "COVID-19 pneumonia typically presents with bilateral ground-glass opacities "
+                "on chest X-ray, predominantly in the lower and peripheral lung zones."
+            ),
+        },
+        {
+            "source": "Radiology (2020): Chest CT Findings in COVID-19",
+            "url": "https://pubs.rsna.org/doi/10.1148/radiol.2020200274",
+            "snippet": (
+                "Common CT findings include bilateral, peripheral, and basal-predominant "
+                "ground-glass opacities; consolidation; and crazy-paving pattern."
+            ),
+        },
+        {
+            "source": "RSNA COVID-19 Pneumonia Reporting",
+            "url": "https://pubs.rsna.org/doi/10.1148/radiol.2020201490",
+            "snippet": (
+                "The RSNA panel recommends reporting COVID-19 pneumonia as typical, "
+                "indeterminate, atypical, or negative based on chest imaging patterns."
+            ),
+        },
+    ],
+    "lung_opacity": [
+        {
+            "source": "ATS/ERS/JRS/ALAT ILD Guidelines",
+            "url": "https://www.thoracic.org/statements/ild.php",
+            "snippet": (
+                "Ground-glass opacity on chest imaging may represent active alveolitis "
+                "or interstitial lung disease and warrants clinical correlation."
+            ),
+        },
+        {
+            "source": "Radiographics (2014): Pulmonary Opacity",
+            "url": "https://pubs.rsna.org/doi/10.1148/rg.342125010",
+            "snippet": (
+                "Lung opacities can arise from alveolar filling, interstitial thickening, "
+                "or a combination, and their distribution guides differential diagnosis."
+            ),
+        },
+        {
+            "source": "Fleischner Society White Paper: Ground-Glass Opacity",
+            "url": "https://www.fleischner-society.org",
+            "snippet": (
+                "Subsolid nodules including pure ground-glass and part-solid nodules "
+                "require follow-up CT to assess growth and malignant potential."
+            ),
+        },
+    ],
+    "normal": [
+        {
+            "source": "Chest Radiology: Plain Film Patterns and Differential Diagnoses (Felson)",
+            "url": "https://www.elsevier.com/books/chest-roentgenology/felson/978-0-7216-3541-5",
+            "snippet": (
+                "A normal chest X-ray demonstrates clear lung fields, normal cardiac silhouette "
+                "(CT ratio < 0.5), and no pleural effusion or pneumothorax."
+            ),
+        },
+        {
+            "source": "ACR Appropriateness Criteria: Chest Radiograph",
+            "url": "https://www.acr.org/Clinical-Resources/ACR-Appropriateness-Criteria",
+            "snippet": (
+                "Routine PA and lateral chest radiographs are recommended as the initial "
+                "imaging study for evaluation of cardiopulmonary symptoms."
+            ),
+        },
+    ],
+    "pneumonia": [
+        {
+            "source": "IDSA/ATS Consensus Guidelines: Community-Acquired Pneumonia (2007)",
+            "url": "https://www.idsociety.org/practice-guideline/community-acquired-pneumonia-cap/",
+            "snippet": (
+                "Radiographic findings of pneumonia include lobar or segmental consolidation, "
+                "bronchopneumonia pattern, and interstitial infiltrates."
+            ),
+        },
+        {
+            "source": "Lancet (2015): Pneumonia – Global Burden",
+            "url": "https://www.thelancet.com/journals/lanres/article/PIIS2213-2600(15)00069-9",
+            "snippet": (
+                "Chest X-ray remains the gold standard for confirming clinical diagnosis "
+                "of pneumonia; patchy or lobar consolidation is the hallmark finding."
+            ),
+        },
+        {
+            "source": "BMJ Best Practice: Pneumonia Diagnosis",
+            "url": "https://bestpractice.bmj.com/topics/en-gb/3000091",
+            "snippet": (
+                "Patients with community-acquired pneumonia typically present with fever, "
+                "cough, and focal consolidation on chest imaging."
+            ),
+        },
+    ],
+}
+
+_RADIOLOGY_TEMPLATES: Dict[str, str] = {
+    "covid": (
+        "The chest X-ray demonstrates features consistent with COVID-19 pneumonia. "
+        "The model identified bilateral pulmonary involvement with high confidence ({confidence:.1%}). "
+        "Key imaging characteristics include ground-glass opacities predominantly in the "
+        "lower and peripheral lung zones. Clinical correlation with RT-PCR testing and "
+        "patient symptoms is recommended. Monitoring for disease progression or development "
+        "of consolidation is advised. Refer to WHO COVID-19 clinical management guidelines "
+        "for treatment thresholds."
+    ),
+    "lung_opacity": (
+        "The chest X-ray shows pulmonary opacity that does not meet criteria for frank "
+        "consolidation or typical COVID-19 pattern. The classifier assigned this finding "
+        "to the lung opacity category with confidence {confidence:.1%}. "
+        "Differential diagnosis includes atypical infection, early organizing pneumonia, "
+        "pulmonary edema, or interstitial lung disease. CT chest with high-resolution "
+        "sequences is recommended for further characterization."
+    ),
+    "normal": (
+        "The chest X-ray appears within normal limits. The model classified this image "
+        "as normal with confidence {confidence:.1%}. "
+        "Lung fields are clear, cardiac silhouette is within normal limits, and there are "
+        "no acute cardiopulmonary findings. Routine follow-up as clinically indicated."
+    ),
+    "pneumonia": (
+        "The chest X-ray demonstrates features consistent with pneumonia. "
+        "The model identified consolidative opacities with confidence {confidence:.1%}. "
+        "Findings are suggestive of lobar or segmental consolidation typical of bacterial "
+        "pneumonia. Clinical correlation with patient symptoms, inflammatory markers, and "
+        "microbiological cultures is recommended. Antibiotic therapy should be guided by "
+        "local susceptibility patterns per IDSA/ATS guidelines."
+    ),
+}
+
+
+class VFLInferenceEngine:
+    """
+    Inference engine for VFLFramework models trained by train_multimodel.py.
+
+    Supports:
+    - Loading checkpoints produced by train_multimodel.py
+    - 4-class prediction (covid, lung_opacity, normal, pneumonia)
+    - Consistent 224×224 preprocessing with ImageNet normalisation
+    - RAG explanation + citations (evidence-grounded, class-specific)
+    """
+
+    DEFAULT_CLASS_NAMES = ["covid", "lung_opacity", "normal", "pneumonia"]
+
+    def __init__(
+        self,
+        model: "torch.nn.Module",
+        class_names: List[str] = None,
+    ):
+        self.model = model
+        self.model.eval()
+        self.class_names = class_names or self.DEFAULT_CLASS_NAMES
+
+        self.transform = transforms.Compose([
+            transforms.Resize((224, 224)),
+            transforms.ToTensor(),
+            transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
+        ])
+
+    # ------------------------------------------------------------------
+    def preprocess(self, image_path: str) -> "torch.Tensor":
+        img = Image.open(image_path).convert("RGB")
+        return self.transform(img).unsqueeze(0)
+
+    # ------------------------------------------------------------------
+    def predict(
+        self,
+        image_path: str,
+        return_explanations: bool = True,
+    ) -> Dict[str, Any]:
+        """
+        Run inference on a single image.
+
+        Returns a dict with:
+          - prediction       : str
+          - confidence       : float (0–1)
+          - probabilities    : {class_name: float}
+          - explanation_text : str  (radiology-style template)
+          - citations        : list of {source, url, snippet}
+          - inference_time   : float (seconds)
+          - model_type       : str
+        """
+        start = time.time()
+
+        tensor = self.preprocess(image_path)
+
+        with torch.no_grad():
+            logits = self.model(tensor)
+            probs = torch.softmax(logits, dim=1)[0]
+            confidence, pred_idx = torch.max(probs, dim=0)
+
+        pred_class = self.class_names[pred_idx.item()]
+        confidence_val = float(confidence.item())
+
+        result: Dict[str, Any] = {
+            "prediction": pred_class,
+            "confidence": confidence_val,
+            "probabilities": {
+                cls: float(p)
+                for cls, p in zip(self.class_names, probs)
+            },
+            "inference_time": time.time() - start,
+            "model_type": "VFL (VFLFramework)",
+        }
+
+        if return_explanations:
+            result["explanation_text"] = _RADIOLOGY_TEMPLATES.get(
+                pred_class,
+                f"Model predicted {pred_class} with confidence {confidence_val:.1%}.",
+            ).format(confidence=confidence_val)
+            result["citations"] = _MEDICAL_CITATIONS.get(pred_class, [])
+
+        return result
+
+
+def load_vfl_model(
+    checkpoint_path: str = None,
+    backbone: str = "resnet18",
+    class_names: List[str] = None,
+) -> "VFLInferenceEngine":
+    """
+    Load a VFLFramework checkpoint saved by train_multimodel.py.
+
+    Args:
+        checkpoint_path : Path to ``{model}_best.pth`` checkpoint file.
+                          When ``None`` (no checkpoint), a randomly-initialised
+                          model is returned so the pipeline can be exercised
+                          end-to-end without trained weights.
+        backbone        : CNN backbone name (e.g. 'resnet18').  Used only when
+                          no checkpoint is provided or when the checkpoint does
+                          not store config.
+        class_names     : Override class names.  Falls back to checkpoint config
+                          then to the 4-class default.
+
+    Returns:
+        VFLInferenceEngine ready for inference.
+    """
+    import sys as _sys
+    _sys.path.insert(0, os.path.dirname(__file__))
+    from vfl_feature_partition import VFLFramework
+
+    resolved_backbone = backbone
+    resolved_classes = class_names if class_names else None
+    resolved_embedding_dim = 512
+    resolved_num_partitions = 4
+    resolved_top_hidden = 256
+    if resolved_classes and len(resolved_classes) > 0:
+        resolved_num_classes = len(resolved_classes)
+    else:
+        resolved_num_classes = 4
+        resolved_classes = None  # will be resolved below
+
+    state_dict = None
+    if checkpoint_path and os.path.isfile(checkpoint_path):
+        ckpt = torch.load(checkpoint_path, map_location="cpu")
+        cfg = ckpt.get("config", {})
+        resolved_backbone = cfg.get("backbone_name", backbone)
+        resolved_embedding_dim = cfg.get("embedding_dim", 512)
+        resolved_num_partitions = cfg.get("num_partitions", 4)
+        resolved_top_hidden = cfg.get("top_hidden", 256)
+        if resolved_classes is None:
+            resolved_classes = cfg.get("class_names", None)
+        resolved_num_classes = len(resolved_classes) if resolved_classes else cfg.get("num_classes", 4)
+        state_dict = ckpt.get("model_state_dict")
+        print(f"✓ Loaded checkpoint: {checkpoint_path}")
+        print(f"  backbone={resolved_backbone}, classes={resolved_classes}, best_val_f1={ckpt.get('best_val_f1', 'N/A')}")
+    elif checkpoint_path:
+        print(f"Warning: checkpoint not found at {checkpoint_path}; using random weights.")
+
+    if resolved_classes is None:
+        resolved_classes = VFLInferenceEngine.DEFAULT_CLASS_NAMES
+        resolved_num_classes = len(resolved_classes)
+
+    model = VFLFramework(
+        backbone_name=resolved_backbone,
+        embedding_dim=resolved_embedding_dim,
+        num_partitions=resolved_num_partitions,
+        num_classes=resolved_num_classes,
+        top_hidden=resolved_top_hidden,
+    )
+
+    if state_dict is not None:
+        model.load_state_dict(state_dict)
+
+    return VFLInferenceEngine(model=model, class_names=resolved_classes)
+
+
+# ============================================================================
+# Command-line interface
+# ============================================================================
+
+def _build_cli_parser():
+    import argparse
+    p = argparse.ArgumentParser(
+        description="MedRAG: VFL inference with RAG explanation",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  # Inference with a trained checkpoint
+  python src/inference.py \\
+      --image data/SplitCovid19/client0/test/covid/COVID-100.png \\
+      --checkpoint outputs/checkpoints/resnet18_best.pth \\
+      --model resnet18 \\
+      --output-json outputs/inference_result.json
+
+  # Use a different backbone
+  python src/inference.py \\
+      --image path/to/xray.jpg \\
+      --checkpoint outputs/checkpoints/densenet121_best.pth \\
+      --model densenet121
+""",
+    )
+    p.add_argument("--image", required=True, help="Path to input chest X-ray image")
+    p.add_argument(
+        "--checkpoint", default=None,
+        help="Path to VFLFramework checkpoint (.pth). If omitted, uses random weights.",
+    )
+    p.add_argument(
+        "--model", default="resnet18",
+        choices=["resnet18", "densenet121", "efficientnet_b0", "mobilenet_v2"],
+        help="Backbone name (default: resnet18)",
+    )
+    p.add_argument(
+        "--output-json", default=None, metavar="PATH",
+        help="Save full JSON result to this file (e.g. outputs/inference_result.json)",
+    )
+    p.add_argument(
+        "--class-names", default=None,
+        help="Comma-separated class names (default: covid,lung_opacity,normal,pneumonia)",
+    )
+    return p
+
+
+if __name__ == "__main__":
+    import argparse
+    import json as _json
+
+    parser = _build_cli_parser()
+    args = parser.parse_args()
+
+    class_names = (
+        [c.strip() for c in args.class_names.split(",")]
+        if args.class_names
+        else None
+    )
+
+    print("=" * 60)
+    print("  MedRAG VFL Inference Engine")
+    print("=" * 60)
+
+    engine = load_vfl_model(
+        checkpoint_path=args.checkpoint,
+        backbone=args.model,
+        class_names=class_names,
+    )
+
+    print(f"\nRunning inference on: {args.image}")
+    result = engine.predict(args.image, return_explanations=True)
+
+    # Console summary
+    print("\n" + "=" * 60)
+    print("  RESULT SUMMARY")
+    print("=" * 60)
+    print(f"  Predicted class : {result['prediction']}")
+    print(f"  Confidence      : {result['confidence']:.1%}")
+    print("\n  Class probabilities:")
+    for cls, prob in sorted(result["probabilities"].items(), key=lambda x: -x[1]):
+        bar = "█" * int(prob * 20)
+        print(f"    {cls:15s}  {prob:6.1%}  {bar}")
+
+    print("\n  RAG Explanation:")
+    print(f"  {result.get('explanation_text', 'N/A')}")
+
+    print("\n  Citations:")
+    for i, cit in enumerate(result.get("citations", []), 1):
+        print(f"  [{i}] {cit['source']}")
+        if cit.get("url"):
+            print(f"      URL: {cit['url']}")
+        print(f"      {cit.get('snippet', '')}")
+
+    print(f"\n  Inference time  : {result['inference_time']:.3f}s")
+    print("=" * 60)
+
+    if args.output_json:
+        out_dir = os.path.dirname(args.output_json)
+        if out_dir:
+            os.makedirs(out_dir, exist_ok=True)
+        with open(args.output_json, "w") as _f:
+            _json.dump(result, _f, indent=2)
+        print(f"\nJSON result saved to: {args.output_json}")

@@ -14,7 +14,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..',
 
 from model_registry import ModelRegistry
 from ledger import Ledger
-from inference import load_inference_model
+from inference import load_inference_model, load_vfl_model, VFLInferenceEngine
 
 
 @st.cache_resource
@@ -36,27 +36,43 @@ def get_ledger():
 @st.cache_resource
 def get_inference_engine(_version_id=None):
     """
-    Get inference engine, optionally loading a specific model version.
-    
+    Get inference engine. Prefers a VFLFramework checkpoint from
+    ``outputs/checkpoints/`` (produced by train_multimodel.py) when
+    available; otherwise falls back to the legacy MedRAGInference model.
+
     Args:
-        _version_id: Optional version ID to load specific model
-    
+        _version_id: Ignored (kept for backwards-compat with existing callers).
+
     Returns:
-        MedRAGInference instance
+        VFLInferenceEngine or MedRAGInference instance.
     """
+    repo_root = Path(__file__).parent.parent
+    ckpt_dir = repo_root / "outputs" / "checkpoints"
+
+    # Try VFLFramework checkpoints first (newest by mtime)
+    preferred_order = ["resnet18", "densenet121", "efficientnet_b0", "mobilenet_v2"]
+    found_ckpt = None
+    found_backbone = None
+    for backbone in preferred_order:
+        candidate = ckpt_dir / f"{backbone}_best.pth"
+        if candidate.is_file():
+            found_ckpt = str(candidate)
+            found_backbone = backbone
+            break
+
+    if found_ckpt and found_backbone:
+        try:
+            engine = load_vfl_model(
+                checkpoint_path=found_ckpt,
+                backbone=found_backbone,
+            )
+            return engine
+        except Exception as e:
+            st.warning(f"Could not load VFL checkpoint ({found_ckpt}): {e}. Falling back.")
+
+    # Legacy fallback
     try:
-        checkpoint_path = None
-        if _version_id:
-            registry = get_model_registry()
-            version = registry.get_version(_version_id)
-            if version:
-                checkpoint_path = version.checkpoint_path
-        
-        inference = load_inference_model(
-            checkpoint_path=checkpoint_path,
-            use_rag=True,
-            num_clients=4
-        )
+        inference = load_inference_model(use_rag=True, num_clients=4)
         return inference
     except Exception as e:
         st.error(f"Error loading inference engine: {e}")

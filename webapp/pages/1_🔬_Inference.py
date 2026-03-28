@@ -15,7 +15,6 @@ import os
 from pathlib import Path
 from PIL import Image
 import time
-import pandas as pd
 
 # Add parent directory to path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
@@ -166,98 +165,65 @@ with col2:
                 
                 # Display results
                 st.markdown("---")
-                
-                # Prediction
+
                 prediction = result['prediction']
                 confidence = float(result.get("confidence", 0.0))
                 confidence = max(0.0, min(1.0, confidence))
 
-                st.markdown(f"### Confidence: {confidence:.1%}")
+                # Prediction header
+                st.markdown(f"### 🩺 Prediction: **{prediction.upper()}**")
+                st.markdown(f"**Confidence:** {confidence:.1%}")
                 st.progress(confidence)
 
                 st.markdown("---")
 
-# Probabilities (render dynamically; don't hardcode keys)
-            st.markdown("### 📊 Class Probabilities")
-            probabilities = result.get("probabilities") or {}
-            items = list(probabilities.items())
-            if not items:
-                st.info("No class probabilities returned.")
-            else:
-                cols = st.columns(2)
-            for i, (cls, prob) in enumerate(items):
-                with cols[i % 2]:
-                   st.metric(str(cls), f"{float(prob):.1%}")
-                # ===== NEW: Enhanced Prediction Details =====
-                st.markdown("### 🔍 Enhanced Prediction Details")
-                
-                col_left, col_right = st.columns(2)
-                
-                with col_left:
-                    st.markdown("#### 🤖 Model Prediction")
-                    st.markdown(f"**Diagnosis:** {prediction}")
-                    st.markdown(f"**Confidence:** {confidence:.1%}")
-                    st.progress(confidence)
-                
-                with col_right:
-                    st.markdown("#### 🧠 RAG Enhancement")
-                    st.info("**Knowledge Base Retrievals:** 3")
-                    
-                    with st.expander("📚 View Retrieved Medical Knowledge"):
-                        st.markdown("""
-                        **Retrieved Cases:**
-                        
-                        1. **COVID-19 Pattern: Bilateral ground-glass opacities**  
-                           Similarity: 94%
-                        
-                        2. **WHO diagnostic criteria matched**  
-                           Similarity: 89%
-                        
-                        3. **Clinical Study: Similar presentation**  
-                           Similarity: 87%
-                        """)
-                    import random
-                    rag_boost = random.randint(60, 88)  # inclusive
-                    st.metric("Confidence Boost from RAG", f"+{rag_boost}%")
-                st.markdown("---")
-                
-                # ===== NEW: Comparison Table =====
-                st.markdown("### ⚖️ Prediction Comparison")
-                
-                comparison_df = pd.DataFrame({
-                    "Model": ["VFL Only", "VFL + RAG (Current)"],
-                    "Prediction": [prediction, prediction],
-                    "Confidence": ["78.2%", "90.5%"],
-                    "Explainability": ["Low", "High"]
-                })
-                
-                st.dataframe(comparison_df, use_container_width=True, hide_index=True)
-                
-                st.markdown("---")
-                
-                # ===== NEW: Blockchain Verification Badge =====
-                blockchain_enabled = True  # Check if blockchain is enabled
-                
-                if blockchain_enabled:
-                    st.markdown("### ⛓️ Blockchain Verification")
-                    st.success("✅ Model verified on blockchain")
-                    
-                    col1, col2 = st.columns([2, 1])
-                    with col1:
-                        import secrets as sec
-                        mock_tx_hash = f"0x{sec.token_hex(32)}"
-                        st.code(mock_tx_hash[:50] + "...", language=None)
-                    
-                    with col2:
-                        if st.button("🔗 View in Explorer"):
-                            st.switch_page("pages/5_⛓️_Blockchain.py")
-                
+                # Probabilities (render dynamically; don't hardcode keys)
+                st.markdown("### 📊 Class Probabilities")
+                probabilities = result.get("probabilities") or {}
+                items = list(probabilities.items())
+                if not items:
+                    st.info("No class probabilities returned.")
+                else:
+                    cols = st.columns(min(len(items), 4))
+                    for i, (cls, prob) in enumerate(items):
+                        with cols[i % min(len(items), 4)]:
+                            st.metric(str(cls).replace("_", " ").title(), f"{float(prob):.1%}")
 
-                # Medical Guidelines
-                if result.get('guidelines'):
-                    st.markdown("### 📖 Medical Guidelines")
-                    for i, guideline in enumerate(result['guidelines'], 1):
-                        st.markdown(f"{i}. {guideline}")
+                st.markdown("---")
+
+                # RAG Explanation
+                st.markdown("### 🧠 RAG Explanation")
+                explanation_text = result.get("explanation_text") or result.get("rag_explanation", "")
+                if explanation_text:
+                    st.info(explanation_text)
+                else:
+                    guidelines = result.get("guidelines", [])
+                    if guidelines:
+                        for g in guidelines:
+                            st.markdown(f"- {g}")
+                    else:
+                        st.info("No RAG explanation available for this prediction.")
+
+                st.markdown("---")
+
+                # Citations
+                st.markdown("### 📚 Citations")
+                citations = result.get("citations", [])
+                if citations:
+                    for idx, cit in enumerate(citations, 1):
+                        source = cit.get("source", "Unknown source")
+                        url = cit.get("url", "")
+                        snippet = cit.get("snippet", "")
+                        title = cit.get("title", "")
+                        with st.expander(f"[{idx}] {source}"):
+                            if title:
+                                st.markdown(f"**{title}**")
+                            if snippet:
+                                st.markdown(f"*{snippet}*")
+                            if url:
+                                st.markdown(f"🔗 [{url}]({url})")
+                else:
+                    st.info("No citations available.")
 
                 st.markdown("---")
 

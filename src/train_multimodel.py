@@ -562,6 +562,27 @@ def train_model(
         f"Weighted F1={final_metrics['f1_weighted']:.4f} "
         f"AUC={final_metrics['roc_auc_macro']:.4f}"
     )
+
+    # Save best checkpoint to disk
+    if best_state is not None:
+        ckpt_path = os.path.join(checkpoint_dir, f"{model_name}_best.pth")
+        torch.save(
+            {
+                "model_state_dict": best_state,
+                "config": {
+                    "backbone_name": model_name,
+                    "num_classes": len(class_names),
+                    "class_names": class_names,
+                    "embedding_dim": vfl_cfg.get("embedding_dim", 512),
+                    "num_partitions": vfl_cfg.get("num_partitions", 4),
+                    "top_hidden": vfl_cfg.get("top_model_hidden", 256),
+                },
+                "best_val_f1": best_val_f1,
+            },
+            ckpt_path,
+        )
+        print(f"  Checkpoint saved: {ckpt_path}")
+
     return model, history, final_metrics
 
 

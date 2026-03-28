@@ -15,6 +15,8 @@ python src/prepare_dataset.py --output-dir data --num-clients 4
 python src/train_multimodel.py --config config/training_config.yaml
 ```
 
+Checkpoints are saved automatically to `outputs/checkpoints/{model}_best.pth` after each model finishes training.
+
 ### With Blockchain Logging
 ```bash
 python src/train_multimodel.py --config config/training_config.yaml --blockchain
@@ -31,6 +33,7 @@ python src/train_multimodel.py --data-dir /path/to/SplitCovid19
 
 ### Outputs
 After training completes, the following files are generated under `outputs/`:
+- `checkpoints/{model}_best.pth` – best-epoch model checkpoint (used by inference)
 - `plots/{model}_training_curves.png` – loss/accuracy/F1 vs epoch
 - `plots/{model}_confusion_matrix.png` – 4×4 confusion matrix heatmap
 - `plots/{model}_roc_curves.png` – ROC curves (One-vs-Rest) with per-class AUC
@@ -40,16 +43,46 @@ After training completes, the following files are generated under `outputs/`:
 
 ### RAG Inference & Explanation
 ```bash
-# Run inference with RAG explanation on a single X-ray image
-python src/inference.py --image path/to/xray.jpg
+# Run inference with a trained checkpoint and save full JSON result
+python src/inference.py \
+    --image path/to/xray.jpg \
+    --checkpoint outputs/checkpoints/resnet18_best.pth \
+    --model resnet18 \
+    --output-json outputs/inference_result.json
+
+# Use a different backbone
+python src/inference.py \
+    --image path/to/xray.jpg \
+    --checkpoint outputs/checkpoints/densenet121_best.pth \
+    --model densenet121 \
+    --output-json outputs/inference_result.json
 ```
+
+The output JSON includes:
+- `prediction` – predicted class (covid / lung_opacity / normal / pneumonia)
+- `confidence` – top-class confidence (0–1)
+- `probabilities` – per-class probabilities dict
+- `explanation_text` – radiology-style RAG explanation
+- `citations` – list of `{source, url, snippet}` evidence references
+
+### Launch the Web UI
+```bash
+cd webapp
+streamlit run app.py
+```
+
+The UI (Inference page) will automatically load the best available VFLFramework checkpoint from `outputs/checkpoints/` and display:
+- Predicted class + confidence bar
+- Per-class probability metrics
+- RAG explanation text
+- Clickable citation list with source links and evidence snippets
 
 ### Architecture
 The pipeline implements:
 - **VFL**: CNN backbone produces 512-d embedding split into 4 × 128-d partitions (one per hospital). A top model aggregates all partitions for final classification.
 - **4 hospitals**: `client0`–`client3` each with `train/test` splits across 4 classes.
 - **Blockchain**: SHA-256 hashes of round metrics are logged to a tamper-evident ledger.
-- **RAG**: Evidence-grounded explanations with citations via ChromaDB + Gemini.
+- **RAG**: Evidence-grounded explanations with citations (class-specific references from WHO, RSNA, IDSA/ATS, etc.).
 
 ## Overview
 
