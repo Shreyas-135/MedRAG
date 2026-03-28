@@ -72,3 +72,8 @@ dataset_info.json
 
 # Model checkpoints (keep registry.json but ignore large .pt files)
 models/registry/checkpoints/*.pt
+
+# Outputs (keep plots and metrics, ignore checkpoints)
+outputs/checkpoints/
+outputs/*.pt
+outputs/*.pth
