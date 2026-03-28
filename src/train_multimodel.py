@@ -33,6 +33,7 @@ from torch.utils.data import DataLoader, ConcatDataset
 import torchvision.transforms as transforms
 from torchvision.datasets import ImageFolder
 import matplotlib
+
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -41,7 +42,6 @@ from sklearn.metrics import (
     confusion_matrix,
     roc_auc_score,
     roc_curve,
-    auc,
 )
 from sklearn.preprocessing import label_binarize
 import yaml
@@ -61,22 +61,30 @@ from vfl_feature_partition import VFLFramework
 def get_transforms(image_size: int = 224, train: bool = True):
     """Return image transforms for training or evaluation."""
     if train:
-        return transforms.Compose([
-            transforms.Resize((image_size + RESIZE_PADDING_PER_SIDE, image_size + RESIZE_PADDING_PER_SIDE)),
-            transforms.RandomCrop(image_size),
-            transforms.RandomHorizontalFlip(),
-            transforms.RandomRotation(10),
-            transforms.ColorJitter(brightness=0.2, contrast=0.2),
-            transforms.ToTensor(),
-            transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
-        ])
+        return transforms.Compose(
+            [
+                transforms.Resize(
+                    (
+                        image_size + RESIZE_PADDING_PER_SIDE,
+                        image_size + RESIZE_PADDING_PER_SIDE,
+                    )
+                ),
+                transforms.RandomCrop(image_size),
+                transforms.RandomHorizontalFlip(),
+                transforms.RandomRotation(10),
+                transforms.ColorJitter(brightness=0.2, contrast=0.2),
+                transforms.ToTensor(),
+                transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
+            ]
+        )
     else:
-        return transforms.Compose([
-            transforms.Resize((image_size, image_size)),
-            transforms.ToTensor(),
-            transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
-        ])
-
+        return transforms.Compose(
+            [
+                transforms.Resize((image_size, image_size)),
+                transforms.ToTensor(),
+                transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
+            ]
+        )
 
 def load_datasets(data_dir: str, clients: List[str], image_size: int = 224):
     """
@@ -119,32 +127,7 @@ def load_datasets(data_dir: str, clients: List[str], image_size: int = 224):
     return combined_train, combined_test, class_names
 
 
-def load_per_client_datasets(data_dir: str, clients: List[str], image_size: int = 224):
-    """
-    Load per-client datasets separately (for FL simulation).
-    Returns dict: {client_id: (train_dataset, test_dataset)}
-    """
-    result = {}
-    train_tf = get_transforms(image_size, train=True)
-    test_tf = get_transforms(image_size, train=False)
-
-    for client in clients:
-        train_path = os.path.join(data_dir, client, "train")
-        test_path = os.path.join(data_dir, client, "test")
-        train_ds = None
-        test_ds = None
-        if os.path.isdir(train_path):
-            train_ds = ImageFolder(train_path, transform=train_tf)
-        if os.path.isdir(test_path):
-            test_ds = ImageFolder(test_path, transform=test_tf)
-        if train_ds is not None:
-            result[client] = (train_ds, test_ds)
-
-    return result
-
-
 # ─────────────────────────── Metrics helpers ──────────────────────────────────
-
 def evaluate(
     model: nn.Module,
     loader: DataLoader,
@@ -223,8 +206,6 @@ def evaluate(
         "roc_auc_macro": float(roc_auc_macro),
         "roc_auc_per_class": [float(v) for v in roc_auc_per_class],
         "confusion_matrix": cm.tolist(),
-        "fpr": {str(k): v.tolist() for k, v in fpr_dict.items()},
-        "tpr": {str(k): v.tolist() for k, v in tpr_dict.items()},
         "all_labels": all_labels.tolist(),
         "all_preds": all_preds.tolist(),
         "all_probs": all_probs.tolist(),
@@ -232,7 +213,6 @@ def evaluate(
 
 
 # ─────────────────────────── Plot helpers ─────────────────────────────────────
-
 def plot_training_curves(history: Dict, model_name: str, plots_dir: str):
     """Save loss/accuracy/F1 vs epoch curves."""
     epochs = list(range(1, len(history["train_loss"]) + 1))
@@ -255,8 +235,12 @@ def plot_training_curves(history: Dict, model_name: str, plots_dir: str):
     axes[1].legend()
     axes[1].grid(alpha=0.3)
 
-    axes[2].plot(epochs, history["val_f1_macro"], "g-o", label="Macro F1", markersize=3)
-    axes[2].plot(epochs, history["val_f1_weighted"], "m-o", label="Weighted F1", markersize=3)
+    axes[2].plot(
+        epochs, history["val_f1_macro"], "g-o", label="Macro F1", markersize=3
+    )
+    axes[2].plot(
+        epochs, history["val_f1_weighted"], "m-o", label="Weighted F1", markersize=3
+    )
     axes[2].set_xlabel("Epoch")
     axes[2].set_ylabel("F1 Score")
     axes[2].set_title("F1 Score (Val)")
@@ -269,7 +253,6 @@ def plot_training_curves(history: Dict, model_name: str, plots_dir: str):
     plt.close()
     print(f"  Saved: {out_path}")
 
-
 def plot_confusion_matrix(
     cm: List[List[int]], class_names: List[str], model_name: str, plots_dir: str
 ):
@@ -277,8 +260,13 @@ def plot_confusion_matrix(
     cm_arr = np.array(cm)
     fig, ax = plt.subplots(figsize=(7, 6))
     sns.heatmap(
-        cm_arr, annot=True, fmt="d", cmap="Blues",
-        xticklabels=class_names, yticklabels=class_names, ax=ax,
+        cm_arr,
+        annot=True,
+        fmt="d",
+        cmap="Blues",
+        xticklabels=class_names,
+        yticklabels=class_names,
+        ax=ax,
     )
     ax.set_xlabel("Predicted")
     ax.set_ylabel("True")
@@ -289,19 +277,25 @@ def plot_confusion_matrix(
     plt.close()
     print(f"  Saved: {out_path}")
 
-
 def plot_roc_curves(metrics: Dict, class_names: List[str], model_name: str, plots_dir: str):
-    """Save ROC curves (OvR) with macro average."""
+    """Save ROC curves (OvR)."""
     fig, ax = plt.subplots(figsize=(8, 6))
     colors = ["blue", "red", "green", "orange", "purple"]
     n_classes = len(class_names)
 
+    # Reconstruct label-binarized arrays to compute curves
+    all_labels = np.array(metrics["all_labels"])
+    all_probs = np.array(metrics["all_probs"])
+    labels_bin = label_binarize(all_labels, classes=list(range(n_classes)))
+
+    aucs = []
     for i in range(n_classes):
-        fpr = metrics["fpr"][str(i)]
-        tpr = metrics["tpr"][str(i)]
+        fpr, tpr, _ = roc_curve(labels_bin[:, i], all_probs[:, i])
         auc_val = metrics["roc_auc_per_class"][i]
+        aucs.append(auc_val)
         ax.plot(
-            fpr, tpr,
+            fpr,
+            tpr,
             color=colors[i % len(colors)],
             lw=1.5,
             label=f"{class_names[i]} (AUC={auc_val:.3f})",
@@ -322,7 +316,6 @@ def plot_roc_curves(metrics: Dict, class_names: List[str], model_name: str, plot
     plt.savefig(out_path, dpi=150, bbox_inches="tight")
     plt.close()
     print(f"  Saved: {out_path}")
-
 
 def plot_model_comparison(summary_records: List[Dict], plots_dir: str):
     """Save bar chart comparing F1 and AUC across models."""
@@ -345,8 +338,12 @@ def plot_model_comparison(summary_records: List[Dict], plots_dir: str):
     for bar in [*bars1, *bars2, *bars3]:
         h = bar.get_height()
         ax.text(
-            bar.get_x() + bar.get_width() / 2, h + 0.005,
-            f"{h:.3f}", ha="center", va="bottom", fontsize=7,
+            bar.get_x() + bar.get_width() / 2,
+            h + 0.005,
+            f"{h:.3f}",
+            ha="center",
+            va="bottom",
+            fontsize=7,
         )
 
     ax.set_xticks(x)
@@ -364,12 +361,10 @@ def plot_model_comparison(summary_records: List[Dict], plots_dir: str):
 
 
 # ─────────────────────────── Blockchain helper ────────────────────────────────
-
 def hash_artifact(obj) -> str:
     """Compute SHA-256 hash of JSON-serializable artifact."""
     serialized = json.dumps(obj, sort_keys=True, default=str)
     return hashlib.sha256(serialized.encode()).hexdigest()
-
 
 def log_to_blockchain(
     ledger,
@@ -379,12 +374,14 @@ def log_to_blockchain(
     metrics: Dict,
 ):
     """Log training round metadata to blockchain ledger."""
-    metrics_hash = hash_artifact({
-        "model": model_name,
-        "round": round_id,
-        "f1_macro": metrics.get("f1_macro"),
-        "roc_auc_macro": metrics.get("roc_auc_macro"),
-    })
+    metrics_hash = hash_artifact(
+        {
+            "model": model_name,
+            "round": round_id,
+            "f1_macro": metrics.get("f1_macro"),
+            "roc_auc_macro": metrics.get("roc_auc_macro"),
+        }
+    )
     node_metrics = {cid: {"participated": True} for cid in client_ids}
     ledger.log_training_round(
         round_num=round_id,
@@ -394,7 +391,6 @@ def log_to_blockchain(
 
 
 # ─────────────────────────── Training loop ────────────────────────────────────
-
 def train_one_epoch(
     model: nn.Module,
     loader: DataLoader,
@@ -415,6 +411,7 @@ def train_one_epoch(
 
         if scaler is not None:
             from torch.cuda.amp import autocast
+
             with autocast():
                 logits = model(images)
                 loss = criterion(logits, labels)
@@ -434,7 +431,6 @@ def train_one_epoch(
 
     return total_loss / max(len(loader), 1), correct / max(total, 1)
 
-
 def train_model(
     model_name: str,
     cfg: Dict,
@@ -448,6 +444,8 @@ def train_model(
     """
     Train a single VFL model for the configured number of epochs.
     Returns (trained_model, history_dict, final_metrics_dict).
+
+    Note: early stopping may shorten the run; plots still reflect max epochs executed.
     """
     print(f"\n{'='*60}")
     print(f"  Training: {model_name}")
@@ -476,16 +474,21 @@ def train_model(
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=n_epochs)
 
     history = {
-        "train_loss": [], "train_acc": [],
-        "val_loss": [], "val_acc": [],
-        "val_f1_macro": [], "val_f1_weighted": [],
+        "train_loss": [],
+        "train_acc": [],
+        "val_loss": [],
+        "val_acc": [],
+        "val_f1_macro": [],
+        "val_f1_weighted": [],
     }
 
     best_val_f1 = -1.0
     best_state = None
     no_improve_count = 0
+
     checkpoint_dir = cfg.get("outputs", {}).get("checkpoint_dir", "outputs/checkpoints")
     os.makedirs(checkpoint_dir, exist_ok=True)
+    best_ckpt_path = os.path.join(checkpoint_dir, f"{model_name}_best.pt")
 
     for epoch in range(1, n_epochs + 1):
         t0 = time.time()
@@ -520,6 +523,26 @@ def train_model(
             best_val_f1 = val_metrics["f1_macro"]
             best_state = {k: v.clone() for k, v in model.state_dict().items()}
             no_improve_count = 0
+
+            # Save best checkpoint (including class names for inference)
+            torch.save(
+                {
+                    "model_name": model_name,
+                    "epoch": epoch,
+                    "state_dict": model.state_dict(),
+                    "class_names": class_names,
+                    "embedding_dim": vfl_cfg.get("embedding_dim", 512),
+                    "num_partitions": vfl_cfg.get("num_partitions", 4),
+                    "top_hidden": vfl_cfg.get("top_model_hidden", 256),
+                    "metrics": {
+                        "f1_macro": val_metrics.get("f1_macro"),
+                        "f1_weighted": val_metrics.get("f1_weighted"),
+                        "roc_auc_macro": val_metrics.get("roc_auc_macro"),
+                        "accuracy": val_metrics.get("accuracy"),
+                    },
+                },
+                best_ckpt_path,
+            )
         else:
             no_improve_count += 1
             if no_improve_count >= patience:
@@ -543,7 +566,6 @@ def train_model(
 
 
 # ─────────────────────────── Main pipeline ────────────────────────────────────
-
 def run_pipeline(cfg: Dict, use_blockchain: bool = False):
     """Main training and evaluation pipeline."""
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -574,16 +596,23 @@ def run_pipeline(cfg: Dict, use_blockchain: bool = False):
     pin = device.type == "cuda"
 
     train_loader = DataLoader(
-        train_ds, batch_size=batch_size, shuffle=True,
-        num_workers=num_workers, pin_memory=pin,
+        train_ds,
+        batch_size=batch_size,
+        shuffle=True,
+        num_workers=num_workers,
+        pin_memory=pin,
     )
     val_loader = DataLoader(
         test_ds if test_ds else train_ds,
-        batch_size=batch_size, shuffle=False,
-        num_workers=num_workers, pin_memory=pin,
+        batch_size=batch_size,
+        shuffle=False,
+        num_workers=num_workers,
+        pin_memory=pin,
     )
 
-    print(f"  Train: {len(train_ds)} images | Val: {len(test_ds) if test_ds else 0} images")
+    print(
+        f"  Train: {len(train_ds)} images | Val: {len(test_ds) if test_ds else 0} images"
+    )
     print(f"  Classes: {class_names}")
     print(f"  Clients: {clients}")
 
@@ -592,6 +621,7 @@ def run_pipeline(cfg: Dict, use_blockchain: bool = False):
     if use_blockchain:
         try:
             from ledger import Ledger
+
             ledger_dir = cfg.get("blockchain", {}).get("ledger_dir", "ledger")
             ledger = Ledger(ledger_dir)
             print("  Blockchain ledger enabled")
@@ -602,10 +632,19 @@ def run_pipeline(cfg: Dict, use_blockchain: bool = False):
     model_cfgs = cfg.get("models", [])
     enabled_models = [m["name"] for m in model_cfgs if m.get("enabled", True)]
     if not enabled_models:
-        enabled_models = ["resnet18", "densenet121", "efficientnet_b0", "mobilenet_v2"]
+        enabled_models = [
+            "resnet18",
+            "densenet121",
+            "efficientnet_b0",
+            "mobilenet_v2",
+        ]
 
     all_metrics: Dict[str, Dict] = {}
     summary_records: List[Dict] = []
+
+    # Ensure checkpoint dir exists and keep a record of best checkpoint paths per model
+    checkpoint_dir = out_cfg.get("checkpoint_dir", "outputs/checkpoints")
+    os.makedirs(checkpoint_dir, exist_ok=True)
 
     for model_name in enabled_models:
         try:
@@ -622,23 +661,33 @@ def run_pipeline(cfg: Dict, use_blockchain: bool = False):
 
             # Exclude large array fields from the compact JSON summary
             all_metrics[model_name] = {
-                k: v for k, v in metrics.items()
-                if k not in ("fpr", "tpr", "all_labels", "all_preds", "all_probs")
+                k: v
+                for k, v in metrics.items()
+                if k
+                not in (
+                    "all_labels",
+                    "all_preds",
+                    "all_probs",
+                )
             }
 
             plot_training_curves(history, model_name, plots_dir)
-            plot_confusion_matrix(metrics["confusion_matrix"], class_names, model_name, plots_dir)
+            plot_confusion_matrix(
+                metrics["confusion_matrix"], class_names, model_name, plots_dir
+            )
             plot_roc_curves(metrics, class_names, model_name, plots_dir)
 
-            summary_records.append({
-                "model": model_name,
-                "accuracy": metrics["accuracy"],
-                "precision_macro": metrics["precision_macro"],
-                "recall_macro": metrics["recall_macro"],
-                "f1_macro": metrics["f1_macro"],
-                "f1_weighted": metrics["f1_weighted"],
-                "roc_auc_macro": metrics["roc_auc_macro"],
-            })
+            summary_records.append(
+                {
+                    "model": model_name,
+                    "accuracy": metrics["accuracy"],
+                    "precision_macro": metrics["precision_macro"],
+                    "recall_macro": metrics["recall_macro"],
+                    "f1_macro": metrics["f1_macro"],
+                    "f1_weighted": metrics["f1_weighted"],
+                    "roc_auc_macro": metrics["roc_auc_macro"],
+                }
+            )
 
         except Exception as exc:
             print(f"\n  ERROR training {model_name}: {exc}")
@@ -656,6 +705,7 @@ def run_pipeline(cfg: Dict, use_blockchain: bool = False):
 
     try:
         import pandas as pd
+
         df = pd.DataFrame(summary_records)
         df.to_csv(summary_file, index=False)
         print(f"Summary CSV saved to: {summary_file}")
@@ -674,39 +724,36 @@ def run_pipeline(cfg: Dict, use_blockchain: bool = False):
 
     return all_metrics
 
-
 def main():
     parser = argparse.ArgumentParser(
         description="Multi-model VFL training pipeline for COVID-19 X-ray classification"
     )
     parser.add_argument(
-        "--config", type=str, default="config/training_config.yaml",
+        "--config",
+        type=str,
+        default="config/training_config.yaml",
         help="Path to training config YAML (default: config/training_config.yaml)",
     )
     parser.add_argument(
-        "--blockchain", action="store_true",
-        help="Enable blockchain (ledger) logging",
+        "--blockchain", action="store_true", help="Enable blockchain (ledger) logging"
     )
     parser.add_argument(
-        "--epochs", type=int, default=None,
-        help="Override number of epochs from config",
+        "--epochs", type=int, default=None, help="Override number of epochs from config"
     )
     parser.add_argument(
-        "--models", type=str, default=None,
+        "--models",
+        type=str,
+        default=None,
         help="Comma-separated list of models to train (e.g. resnet18,densenet121)",
     )
     parser.add_argument(
-        "--data-dir", type=str, default=None,
-        help="Override dataset directory",
+        "--data-dir", type=str, default=None, help="Override dataset directory"
     )
     args = parser.parse_args()
 
     # Resolve config path relative to repo root
     repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-    config_path = (
-        args.config if os.path.isabs(args.config)
-        else os.path.join(repo_root, args.config)
-    )
+    config_path = args.config if os.path.isabs(args.config) else os.path.join(repo_root, args.config)
 
     if not os.path.exists(config_path):
         print(f"Config file not found: {config_path}")
