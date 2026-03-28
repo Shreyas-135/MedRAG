@@ -72,3 +72,11 @@ dataset_info.json
 
 # Model checkpoints (keep registry.json but ignore large .pt files)
 models/registry/checkpoints/*.pt
+
+# Outputs (keep .gitkeep to track dir; ignore generated artifacts and checkpoints)
+outputs/checkpoints/
+outputs/*.pt
+outputs/*.pth
+outputs/metrics.json
+outputs/summary.csv
+outputs/plots/*.png

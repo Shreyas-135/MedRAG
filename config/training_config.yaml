@@ -1,0 +1,47 @@
+training:
+  epochs: 12
+  batch_size: 32
+  learning_rate: 0.001
+  weight_decay: 0.0001
+  early_stopping_patience: 5
+  num_workers: 0
+
+models:
+  - name: resnet18
+    enabled: true
+  - name: densenet121
+    enabled: true
+  - name: efficientnet_b0
+    enabled: true
+  - name: mobilenet_v2
+    enabled: true
+
+dataset:
+  data_dir: "data/SplitCovid19"
+  clients:
+    - client0
+    - client1
+    - client2
+    - client3
+  class_names:
+    - covid
+    - lung_opacity
+    - normal
+    - pneumonia
+  image_size: 224
+
+vfl:
+  embedding_dim: 512
+  num_partitions: 4
+  top_model_hidden: 256
+
+outputs:
+  dir: "outputs"
+  plots_dir: "outputs/plots"
+  metrics_file: "outputs/metrics.json"
+  summary_file: "outputs/summary.csv"
+  checkpoint_dir: "outputs/checkpoints"
+
+blockchain:
+  enabled: false
+  ledger_dir: "ledger"

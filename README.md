@@ -1,5 +1,56 @@
 # MedRAG: A Blockchain-Enabled Vertical Federated Learning Framework for Privacy-Preserving Cross-Hospital Medical Imaging using Verifiable RAG
 
+## Quick Start: Capstone Pipeline
+
+### Dataset Preparation
+```bash
+# Place your COVID-19 X-ray dataset (from Kaggle) under:
+# data/SplitCovid19/client{0..3}/{train,test}/{covid,lung_opacity,normal,pneumonia}
+# Or use the existing preparation script:
+python src/prepare_dataset.py --output-dir data --num-clients 4
+```
+
+### Multi-Model VFL Training (All 4 CNNs, 12 epochs, 4 hospitals)
+```bash
+python src/train_multimodel.py --config config/training_config.yaml
+```
+
+### With Blockchain Logging
+```bash
+python src/train_multimodel.py --config config/training_config.yaml --blockchain
+```
+
+### Custom Options
+```bash
+# Override epochs and model selection
+python src/train_multimodel.py --epochs 15 --models resnet18,densenet121
+
+# Custom dataset directory
+python src/train_multimodel.py --data-dir /path/to/SplitCovid19
+```
+
+### Outputs
+After training completes, the following files are generated under `outputs/`:
+- `plots/{model}_training_curves.png` – loss/accuracy/F1 vs epoch
+- `plots/{model}_confusion_matrix.png` – 4×4 confusion matrix heatmap
+- `plots/{model}_roc_curves.png` – ROC curves (One-vs-Rest) with per-class AUC
+- `plots/model_comparison.png` – bar chart comparing F1 and AUC across models
+- `metrics.json` – all metrics per model
+- `summary.csv` – one-row-per-model summary table
+
+### RAG Inference & Explanation
+```bash
+# Run inference with RAG explanation on a single X-ray image
+python src/inference.py --image path/to/xray.jpg
+```
+
+### Architecture
+The pipeline implements:
+- **VFL**: CNN backbone produces 512-d embedding split into 4 × 128-d partitions (one per hospital). A top model aggregates all partitions for final classification.
+- **4 hospitals**: `client0`–`client3` each with `train/test` splits across 4 classes.
+- **Blockchain**: SHA-256 hashes of round metrics are logged to a tamper-evident ledger.
+- **RAG**: Evidence-grounded explanations with citations via ChromaDB + Gemini.
+
 ## Overview
 
 This project implements a comprehensive framework that combines:
