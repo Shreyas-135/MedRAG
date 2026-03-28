@@ -52,7 +52,7 @@ def get_inference_engine(_version_id=None):
     # Try VFLFramework checkpoints first (newest by mtime)
     preferred_order = ["resnet18", "densenet121", "efficientnet_b0", "mobilenet_v2"]
     found_ckpt = None
-    found_backbone = "resnet18"
+    found_backbone = None
     for backbone in preferred_order:
         candidate = ckpt_dir / f"{backbone}_best.pth"
         if candidate.is_file():
@@ -60,7 +60,7 @@ def get_inference_engine(_version_id=None):
             found_backbone = backbone
             break
 
-    if found_ckpt:
+    if found_ckpt and found_backbone:
         try:
             engine = load_vfl_model(
                 checkpoint_path=found_ckpt,

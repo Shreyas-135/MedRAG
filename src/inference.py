@@ -774,11 +774,15 @@ def load_vfl_model(
     from vfl_feature_partition import VFLFramework
 
     resolved_backbone = backbone
-    resolved_classes = class_names
+    resolved_classes = class_names if class_names else None
     resolved_embedding_dim = 512
     resolved_num_partitions = 4
     resolved_top_hidden = 256
-    resolved_num_classes = len(class_names) if class_names else 4
+    if resolved_classes and len(resolved_classes) > 0:
+        resolved_num_classes = len(resolved_classes)
+    else:
+        resolved_num_classes = 4
+        resolved_classes = None  # will be resolved below
 
     state_dict = None
     if checkpoint_path and os.path.isfile(checkpoint_path):

@@ -186,7 +186,7 @@ with col2:
                 else:
                     cols = st.columns(min(len(items), 4))
                     for i, (cls, prob) in enumerate(items):
-                        with cols[i % len(cols)]:
+                        with cols[i % min(len(items), 4)]:
                             st.metric(str(cls).replace("_", " ").title(), f"{float(prob):.1%}")
 
                 st.markdown("---")
