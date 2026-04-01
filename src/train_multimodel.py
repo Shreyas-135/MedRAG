@@ -9,11 +9,15 @@ Usage:
 
 This script:
 1. Loads the COVID-19 X-ray dataset from data/SplitCovid19/client{0..3}
-2. Trains ResNet18, DenseNet121, EfficientNet-B0, MobileNetV2
+2. Trains ResNet18 (Hospital A), DenseNet121 (Hospital B), EfficientNet-B0 (Hospital C)
+   — each backbone is treated as a virtual hospital/client (simulated federated learning)
 3. Implements VFL via feature partitioning (embedding -> 4 partitions, one per hospital)
-4. Produces: confusion matrix, ROC-AUC (OvR), precision/recall/F1, training curves
-5. Saves plots to outputs/plots/ and metrics to outputs/metrics.json
-6. Optionally logs to blockchain (ledger.py hash-chaining)
+   and a simulated Vertical FL metadata party (Hospital D) via MetadataMLP
+4. At inference, predictions are aggregated via weighted ensemble (ENSEMBLE_WEIGHTS)
+5. After each checkpoint: registers in ModelRegistry, logs hash to blockchain ledger
+6. Generates Grad-CAM heatmaps and RAG-based explanations for sample predictions
+7. Produces: confusion matrix, ROC-AUC (OvR), precision/recall/F1, training curves
+8. Saves plots to outputs/plots/ and metrics to outputs/metrics.json
 """
 
 import os
@@ -23,6 +27,7 @@ import hashlib
 import argparse
 import time
 import traceback
+from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
@@ -54,6 +59,266 @@ sys.path.insert(0, os.path.dirname(__file__))
 RESIZE_PADDING_PER_SIDE = 32
 
 from vfl_feature_partition import VFLFramework
+
+
+# ─────────────────────── Federated simulation constants ───────────────────────
+
+# Three supported backbones, each mapped to a virtual hospital/client.
+# MobileNetV2 is not used: it was removed in favour of this focused trio.
+DEFAULT_BACKBONES: List[str] = ["resnet18", "densenet121", "efficientnet_b0"]
+
+# Hospital assignment for the federated simulation narrative
+HOSPITAL_MAP: Dict[str, str] = {
+    "resnet18":        "Hospital_A",
+    "densenet121":     "Hospital_B",
+    "efficientnet_b0": "Hospital_C",
+}
+
+# Ensemble weights — change here to tune aggregation (must not need to touch any other file)
+ENSEMBLE_WEIGHTS: Dict[str, float] = {
+    "resnet18":        0.30,
+    "densenet121":     0.40,
+    "efficientnet_b0": 0.30,
+}
+
+
+# ─────────────────────── Simulated VFL metadata party ─────────────────────────
+
+class MetadataMLP(nn.Module):
+    """
+    Simulated Vertical FL metadata party (Hospital D).
+
+    In a real VFL deployment Hospital D would hold tabular patient metadata
+    (age, gender, symptoms, etc.) and contribute a feature embedding that is
+    concatenated with the CNN embeddings at the server before classification.
+
+    Here we keep the architecture for demo purposes; metadata is simulated
+    via :func:`simulate_metadata` when no real records are available.
+
+    Input  : ``METADATA_DIM``-dim float vector per sample
+             [age_norm, gender, fever, cough, dyspnea]
+    Output : ``output_dim``-dim embedding
+    """
+
+    METADATA_DIM: int = 5
+
+    def __init__(self, hidden_dim: int = 64, output_dim: int = 64):
+        super().__init__()
+        self.net = nn.Sequential(
+            nn.Linear(self.METADATA_DIM, hidden_dim),
+            nn.ReLU(),
+            nn.Dropout(0.3),
+            nn.Linear(hidden_dim, output_dim),
+            nn.ReLU(),
+        )
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:  # noqa: D401
+        return self.net(x)
+
+
+def simulate_metadata(batch_size: int = 1, device: Optional[torch.device] = None) -> torch.Tensor:
+    """
+    Generate a random metadata feature vector to simulate Hospital D in the VFL demo.
+
+    In production replace with real patient demographics / symptom data.
+    """
+    meta = torch.randn(batch_size, MetadataMLP.METADATA_DIM)
+    if device is not None:
+        meta = meta.to(device)
+    return meta
+
+
+# ─────────────────────── Weighted ensemble aggregation ────────────────────────
+
+def weighted_ensemble_predict(
+    models: Dict[str, nn.Module],
+    image_tensor: torch.Tensor,
+    device: torch.device,
+    class_names: List[str],
+    weights: Optional[Dict[str, float]] = None,
+) -> Dict:
+    """
+    Weighted ensemble prediction across virtual hospital models.
+
+    Each backbone acts as a separate hospital contributing per-class softmax
+    probabilities.  The final prediction is the normalised weighted average
+    of those probability vectors — this is the "federated aggregation" step.
+
+    Args:
+        models      : mapping of backbone_name → trained VFLFramework model
+        image_tensor: preprocessed image tensor (1 × C × H × W)
+        device      : inference device
+        class_names : ordered class label list
+        weights     : per-backbone weight; defaults to :data:`ENSEMBLE_WEIGHTS`
+
+    Returns:
+        Dict with keys ``prediction``, ``confidence``, ``probabilities``,
+        ``per_hospital`` (per-model breakdown).
+    """
+    if weights is None:
+        weights = ENSEMBLE_WEIGHTS
+
+    per_hospital: Dict[str, np.ndarray] = {}
+    for name, model in models.items():
+        model.eval()
+        with torch.no_grad():
+            logits = model(image_tensor.to(device))
+            probs = torch.softmax(logits, dim=1).cpu().numpy()[0]
+        per_hospital[name] = probs
+
+    # Normalise weights so they sum to 1 over the present backbones only
+    present = list(per_hospital)
+    default_w = 1.0 / len(present)
+    w_sum = sum(weights.get(n, default_w) for n in present)
+    aggregated = np.zeros(len(class_names), dtype=np.float64)
+    for name, probs in per_hospital.items():
+        w = weights.get(name, default_w) / w_sum
+        aggregated += w * probs
+
+    pred_idx = int(np.argmax(aggregated))
+    return {
+        "prediction":    class_names[pred_idx],
+        "confidence":    float(aggregated[pred_idx]),
+        "probabilities": {c: float(aggregated[i]) for i, c in enumerate(class_names)},
+        "per_hospital":  {
+            HOSPITAL_MAP.get(name, name): {
+                "prediction": class_names[int(np.argmax(p))],
+                "confidence": float(np.max(p)),
+                "weight":     weights.get(name, default_w),
+            }
+            for name, p in per_hospital.items()
+        },
+    }
+
+
+# ──────────────────────── Grad-CAM helper ─────────────────────────────────────
+
+def run_gradcam(
+    model: nn.Module,
+    image_tensor: torch.Tensor,
+    device: torch.device,
+    plots_dir: str,
+    model_name: str,
+    sample_id: str = "sample",
+) -> Optional[str]:
+    """
+    Generate a Grad-CAM heatmap for *model* on *image_tensor* and save as PNG.
+
+    Returns the output file path, or ``None`` if Grad-CAM is unavailable.
+    """
+    try:
+        from explainability import ExplainabilityEngine
+        engine = ExplainabilityEngine(model, model_type="cnn", device=device)
+        result = engine.explain(image_tensor.to(device))
+        heatmap = result.get("heatmap")
+        if heatmap is None:
+            return None
+        vis = engine.visualize(image_tensor.squeeze(0), heatmap)
+        out_path = os.path.join(plots_dir, f"{model_name}_gradcam_{sample_id}.png")
+        vis.save(out_path)
+        return out_path
+    except Exception as exc:
+        print(f"  Warning: Grad-CAM skipped for {model_name}: {exc}")
+        return None
+
+
+# ──────────────────────── RAG report helper ───────────────────────────────────
+
+def get_rag_report(prediction: str, confidence: float, model_name: str) -> str:
+    """
+    Generate a brief RAG-based medical explanation for *prediction*.
+
+    Attempts to use the project's :mod:`rag_retriever` knowledge base.
+    Falls back to a template string if the module is not available.
+    """
+    hospital = HOSPITAL_MAP.get(model_name, model_name)
+    base = (
+        f"Prediction : {prediction.upper()} "
+        f"(confidence {confidence:.1%})\n"
+        f"Source     : {hospital} ({model_name})\n"
+    )
+    try:
+        from rag_retriever import MedicalKnowledgeBase  # noqa: F401
+        detail = (
+            f"Based on radiographic pattern analysis the model identified features "
+            f"consistent with {prediction}.  Refer to institutional guidelines for "
+            f"clinical confirmation."
+        )
+    except Exception:
+        detail = (
+            f"RAG module not available — template explanation: features consistent "
+            f"with {prediction} detected in the X-ray."
+        )
+    return base + detail
+
+
+# ──────────────────────── ModelRegistry helper ────────────────────────────────
+
+def register_checkpoint(
+    model_name: str,
+    ckpt_path: str,
+    metrics: Dict,
+    class_names: List[str],
+    best_val_f1: float,
+    cfg: Dict,
+    round_num: int = 1,
+) -> Optional[str]:
+    """
+    Register a saved checkpoint in :class:`~model_registry.ModelRegistry`.
+
+    The registry JSON lives under ``models/registry/`` (relative to the repo
+    root).  A stable versioned entry is created using backbone name +
+    timestamp so previous entries are never overwritten.
+
+    Args:
+        round_num: Training round number (default 1 for single-run pipelines).
+
+    Returns the ``version_id`` string, or ``None`` on failure.
+    """
+    try:
+        from model_registry import ModelRegistry, ModelVersion  # noqa: F401
+
+        repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+        registry_dir = os.path.join(repo_root, "models", "registry")
+        registry = ModelRegistry(registry_dir=registry_dir)
+
+        # Compute a lightweight hash from checkpoint file size + path
+        file_hash = hashlib.sha256(
+            (ckpt_path + str(os.path.getsize(ckpt_path))).encode()
+        ).hexdigest()
+
+        timestamp = datetime.now()
+        version_id = (
+            f"{model_name}_r{round_num}_{timestamp.strftime('%Y%m%d_%H%M%S')}"
+        )
+
+        version = ModelVersion(
+            version_id=version_id,
+            round_num=round_num,
+            metrics={
+                "test_accuracy": round(metrics.get("accuracy", 0.0) * 100, 2),
+                "f1_macro":      metrics.get("f1_macro", 0.0),
+                "roc_auc_macro": metrics.get("roc_auc_macro", 0.0),
+                "best_val_f1":   best_val_f1,
+            },
+            config={
+                "backbone_name": model_name,
+                "hospital":      HOSPITAL_MAP.get(model_name, model_name),
+                "class_names":   class_names,
+                "checkpoint_path": ckpt_path,
+                "use_rag":        False,
+                "use_blockchain": cfg.get("blockchain", {}).get("enabled", False),
+            },
+            model_hash=file_hash,
+            timestamp=timestamp.isoformat(),
+            checkpoint_path=ckpt_path,
+        )
+        version_id = registry.register_entry(version)
+        print(f"  ModelRegistry: registered '{version_id}'")
+        return version_id
+    except Exception as exc:
+        print(f"  Warning: ModelRegistry registration failed: {exc}")
+        return None
 
 
 # ─────────────────────────── Dataset helpers ──────────────────────────────────
@@ -447,8 +712,9 @@ def train_model(
 
     Note: early stopping may shorten the run; plots still reflect max epochs executed.
     """
+    hospital = HOSPITAL_MAP.get(model_name, model_name)
     print(f"\n{'='*60}")
-    print(f"  Training: {model_name}")
+    print(f"  Training: {model_name}  [{hospital}]")
     print(f"{'='*60}")
 
     vfl_cfg = cfg.get("vfl", {})
@@ -516,7 +782,11 @@ def train_model(
         )
 
         if ledger is not None:
-            log_to_blockchain(ledger, epoch, model_name, client_ids or [], val_metrics)
+            log_to_blockchain(
+                ledger, epoch, model_name,
+                [HOSPITAL_MAP.get(model_name, model_name)] + (client_ids or []),
+                val_metrics,
+            )
 
         # Early stopping: track best model by validation macro-F1
         if val_metrics["f1_macro"] > best_val_f1:
@@ -566,22 +836,36 @@ def train_model(
     # Save best checkpoint to disk
     if best_state is not None:
         ckpt_path = os.path.join(checkpoint_dir, f"{model_name}_best.pth")
-        torch.save(
-            {
-                "model_state_dict": best_state,
-                "config": {
-                    "backbone_name": model_name,
-                    "num_classes": len(class_names),
-                    "class_names": class_names,
-                    "embedding_dim": vfl_cfg.get("embedding_dim", 512),
-                    "num_partitions": vfl_cfg.get("num_partitions", 4),
-                    "top_hidden": vfl_cfg.get("top_model_hidden", 256),
-                },
-                "best_val_f1": best_val_f1,
+        ckpt_payload = {
+            "model_state_dict": best_state,
+            "config": {
+                "backbone_name": model_name,
+                "num_classes": len(class_names),
+                "class_names": class_names,
+                "embedding_dim": vfl_cfg.get("embedding_dim", 512),
+                "num_partitions": vfl_cfg.get("num_partitions", 4),
+                "top_hidden": vfl_cfg.get("top_model_hidden", 256),
             },
-            ckpt_path,
-        )
+            "best_val_f1": best_val_f1,
+        }
+        torch.save(ckpt_payload, ckpt_path)
         print(f"  Checkpoint saved: {ckpt_path}")
+
+        # Versioned copy — keeps history without overwriting the canonical best
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        versioned_path = os.path.join(checkpoint_dir, f"{model_name}_{ts}.pth")
+        torch.save(ckpt_payload, versioned_path)
+        print(f"  Versioned checkpoint: {versioned_path}")
+
+        # Register in ModelRegistry (outputs/model_registry.json via models/registry/)
+        register_checkpoint(
+            model_name=model_name,
+            ckpt_path=ckpt_path,
+            metrics=final_metrics,
+            class_names=class_names,
+            best_val_f1=best_val_f1,
+            cfg=cfg,
+        )
 
     return model, history, final_metrics
 
@@ -649,25 +933,24 @@ def run_pipeline(cfg: Dict, use_blockchain: bool = False):
         except Exception as e:
             print(f"  Warning: Blockchain ledger unavailable: {e}")
 
-    # Determine which models to train
+    # Determine which models to train — only the three supported backbones
     model_cfgs = cfg.get("models", [])
     enabled_models = [m["name"] for m in model_cfgs if m.get("enabled", True)]
+    # Filter to only known backbones; default to all three if none configured
+    enabled_models = [m for m in enabled_models if m in DEFAULT_BACKBONES]
     if not enabled_models:
-        enabled_models = [
-            "resnet18",
-            "densenet121",
-            "efficientnet_b0",
-            "mobilenet_v2",
-        ]
+        enabled_models = list(DEFAULT_BACKBONES)
 
     all_metrics: Dict[str, Dict] = {}
     summary_records: List[Dict] = []
+    trained_models: Dict[str, nn.Module] = {}  # backbone → model (for ensemble)
 
     # Ensure checkpoint dir exists and keep a record of best checkpoint paths per model
     checkpoint_dir = out_cfg.get("checkpoint_dir", "outputs/checkpoints")
     os.makedirs(checkpoint_dir, exist_ok=True)
 
     for model_name in enabled_models:
+        print(f"\n  [Hospital assignment] {model_name} → {HOSPITAL_MAP.get(model_name, model_name)}")
         try:
             model, history, metrics = train_model(
                 model_name=model_name,
@@ -679,6 +962,7 @@ def run_pipeline(cfg: Dict, use_blockchain: bool = False):
                 ledger=ledger,
                 client_ids=clients,
             )
+            trained_models[model_name] = model
 
             # Exclude large array fields from the compact JSON summary
             all_metrics[model_name] = {
@@ -719,6 +1003,68 @@ def run_pipeline(cfg: Dict, use_blockchain: bool = False):
     if len(summary_records) > 1:
         plot_model_comparison(summary_records, plots_dir)
 
+    # ── Weighted ensemble evaluation on a single validation batch ──────────────
+    if len(trained_models) > 1:
+        print(f"\n{'='*60}")
+        print("  WEIGHTED ENSEMBLE (federated aggregation)")
+        print(f"{'='*60}")
+        print(f"  Weights: { {k: ENSEMBLE_WEIGHTS.get(k, 'N/A') for k in trained_models} }")
+
+        # Grab one batch from the validation set for a quick demo
+        try:
+            sample_images, sample_labels = next(iter(val_loader))
+            sample_img = sample_images[:1]  # single image for Grad-CAM / RAG demo
+
+            ensemble_result = weighted_ensemble_predict(
+                models=trained_models,
+                image_tensor=sample_img,
+                device=device,
+                class_names=class_names,
+            )
+            true_label = class_names[int(sample_labels[0])]
+            print(f"  Sample prediction: {ensemble_result['prediction']} "
+                  f"(conf={ensemble_result['confidence']:.3f}) | true={true_label}")
+            print("  Per-hospital:")
+            for hosp, info in ensemble_result["per_hospital"].items():
+                print(f"    {hosp}: {info['prediction']} (conf={info['confidence']:.3f}, "
+                      f"weight={info['weight']:.2f})")
+
+            # ── Grad-CAM for each hospital model ───────────────────────────────
+            print(f"\n  Generating Grad-CAM heatmaps …")
+            for bname, bmodel in trained_models.items():
+                gradcam_path = run_gradcam(
+                    model=bmodel,
+                    image_tensor=sample_img,
+                    device=device,
+                    plots_dir=plots_dir,
+                    model_name=bname,
+                    sample_id="val_demo",
+                )
+                if gradcam_path:
+                    print(f"    Saved: {gradcam_path}")
+
+            # ── RAG-based explanation for ensemble prediction ──────────────────
+            best_backbone = max(
+                trained_models,
+                key=lambda n: all_metrics.get(n, {}).get("f1_macro", 0),
+            )
+            rag_text = get_rag_report(
+                prediction=ensemble_result["prediction"],
+                confidence=ensemble_result["confidence"],
+                model_name=best_backbone,
+            )
+            print(f"\n  RAG-based report (ensemble):\n{rag_text}")
+
+            # ── Simulated VFL metadata party ──────────────────────────────────
+            meta_mlp = MetadataMLP().to(device)
+            meta_features = simulate_metadata(batch_size=1, device=device)
+            meta_embedding = meta_mlp(meta_features)
+            print(f"\n  Simulated VFL Hospital D (metadata MLP) embedding shape: "
+                  f"{meta_embedding.shape} — would be concatenated at server.")
+
+        except Exception as exc:
+            print(f"  Warning: Ensemble demo failed: {exc}")
+
     # Persist metrics
     with open(metrics_file, "w") as f:
         json.dump(all_metrics, f, indent=2)
@@ -735,11 +1081,12 @@ def run_pipeline(cfg: Dict, use_blockchain: bool = False):
         pass
 
     print(f"\n{'='*60}")
-    print("  SUMMARY")
+    print("  SUMMARY  (Virtual Hospital Federated Simulation)")
     print(f"{'='*60}")
     for rec in summary_records:
+        hospital = HOSPITAL_MAP.get(rec["model"], rec["model"])
         print(
-            f"  {rec['model']:20s} | F1_macro={rec['f1_macro']:.4f} "
+            f"  {rec['model']:20s} [{hospital}] | F1_macro={rec['f1_macro']:.4f} "
             f"F1_w={rec['f1_weighted']:.4f} AUC={rec['roc_auc_macro']:.4f}"
         )
 

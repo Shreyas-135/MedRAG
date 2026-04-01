@@ -90,33 +90,29 @@ class ServerModel(nn.Module):
 
 def create_client_model(model_type='resnet_vgg', embedding_dim=64):
     """
-    Factory function to create different client model architectures
-    
-    Args: 
-        model_type: 'resnet_vgg', 'vit', 'vit_small', 'hybrid'
-        embedding_dim: Output embedding dimension
-    
-    Returns: 
+    Factory function to create a client model.
+
+    Supported types (legacy two-class VFL clients kept for backward
+    compatibility with ``inference.py`` fallback path):
+        - ``'resnet_vgg'``: ResNet50 + VGG19 dual-stream (default)
+
+    For the main training pipeline the :class:`~vfl_feature_partition.VFLFramework`
+    class is used instead (backbones: resnet18, densenet121, efficientnet_b0).
+
+    Args:
+        model_type  : model architecture string (only 'resnet_vgg' is active)
+        embedding_dim: output embedding dimension (used by newer architectures)
+
+    Returns:
         Client model instance
     """
     if model_type == 'resnet_vgg':
         return ClientModel2Layers()
-    
-    elif model_type == 'vit':
-        from vit_models import ClientModelViT
-        return ClientModelViT(model_name='vit_base_patch16_224', embedding_dim=embedding_dim)
-    
-    elif model_type == 'vit_small':
-        from vit_models import ClientModelViT
-        return ClientModelViT(model_name='vit_small_patch16_224', embedding_dim=embedding_dim)
-    
-    elif model_type == 'hybrid':
-        from vit_models import ClientModelHybrid
-        return ClientModelHybrid(embedding_dim=embedding_dim)
-    
-    else:
-        raise ValueError(f"Unknown model type: {model_type}. "
-                        f"Choose from: resnet_vgg, vit, vit_small, hybrid")
+
+    raise ValueError(
+        f"Unknown model type: {model_type!r}. "
+        f"For the main pipeline use VFLFramework (resnet18, densenet121, efficientnet_b0)."
+    )
 
 
 def get_model_info(model):

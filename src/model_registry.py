@@ -110,6 +110,24 @@ class ModelRegistry:
         data = {vid: v.to_dict() for vid, v in self.versions.items()}
         with open(self.registry_file, 'w') as f:
             json.dump(data, f, indent=2)
+
+    def register_entry(self, version: 'ModelVersion') -> str:
+        """
+        Register a pre-built :class:`ModelVersion` entry (e.g. for an
+        already-saved checkpoint) and persist the registry.
+
+        This is the public counterpart of the internal ``_save_registry``
+        helper and avoids callers having to access private methods.
+
+        Args:
+            version: Fully populated :class:`ModelVersion` instance.
+
+        Returns:
+            The ``version_id`` of the registered entry.
+        """
+        self.versions[version.version_id] = version
+        self._save_registry()
+        return version.version_id
     
     def _compute_model_hash(self, model: torch.nn.Module) -> str:
         """
