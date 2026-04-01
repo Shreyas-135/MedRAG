@@ -1,11 +1,14 @@
 """
-Tests for ZIP Dataset Loader and YOLO Models
+Tests for ZIP Dataset Loader
 
 This module contains tests for:
 1. ZIP dataset extraction and organization
-2. YOLO model initialization and forward pass
-3. Hospital naming and directory structure
-4. Compatibility with VFL framework
+2. Hospital naming and directory structure
+3. Compatibility with VFL framework
+
+Note: YOLO model tests have been removed as models_with_yolo.py is no longer
+part of the project. The supported backbones are now resnet18, densenet121,
+and efficientnet_b0 (see vfl_feature_partition.py / train_multimodel.py).
 """
 
 import sys
@@ -194,96 +197,6 @@ class TestZipDatasetLoader(unittest.TestCase):
         self.assertEqual(total_images, 20, "Total images should be 20")
 
 
-class TestYOLOModels(unittest.TestCase):
-    """Test YOLO model integration."""
-    
-    @classmethod
-    def setUpClass(cls):
-        """Set up test fixtures."""
-        if not TORCH_AVAILABLE:
-            raise unittest.SkipTest("PyTorch not available")
-    
-    def test_import_yolo_models(self):
-        """Test that YOLO models can be imported."""
-        try:
-            from models_with_yolo import ClientModelYOLO, ClientModelResNetYOLO
-            from models_with_yolo import create_client_model, get_model_info
-            self.assertTrue(True)
-        except ImportError as e:
-            self.fail(f"Could not import YOLO models: {e}")
-    
-    def test_create_resnet_vgg_model(self):
-        """Test creating the default ResNet+VGG model."""
-        from models_with_yolo import create_client_model
-        
-        model = create_client_model('resnet_vgg', embedding_dim=64)
-        self.assertIsNotNone(model)
-        
-        # Test forward pass
-        dummy_input = torch.randn(2, 3, 224, 224)
-        with torch.no_grad():
-            output = model(dummy_input)
-        
-        self.assertEqual(output.shape, (2, 64), "Output shape should be (batch_size, 64)")
-    
-    def test_yolo_model_availability(self):
-        """Test if YOLO models are available (may not be if ultralytics not installed)."""
-        try:
-            from ultralytics import YOLO
-            yolo_available = True
-        except ImportError:
-            yolo_available = False
-        
-        if not yolo_available:
-            self.skipTest("ultralytics not available")
-    
-    def test_create_yolo5_model(self):
-        """Test creating YOLOv5 model (requires ultralytics)."""
-        try:
-            from ultralytics import YOLO
-        except ImportError:
-            self.skipTest("ultralytics not available")
-        
-        try:
-            from models_with_yolo import create_client_model
-            
-            model = create_client_model('yolo5', embedding_dim=64)
-            self.assertIsNotNone(model)
-            
-            # Test forward pass
-            dummy_input = torch.randn(2, 3, 224, 224)
-            with torch.no_grad():
-                output = model(dummy_input)
-            
-            self.assertEqual(output.shape, (2, 64), 
-                           "YOLOv5 output shape should be (batch_size, 64)")
-        except Exception as e:
-            # YOLO model download might fail in CI environment
-            self.skipTest(f"YOLO model creation failed (expected in CI): {e}")
-    
-    def test_model_info(self):
-        """Test get_model_info function."""
-        from models_with_yolo import create_client_model, get_model_info
-        
-        model = create_client_model('resnet_vgg', embedding_dim=64)
-        info = get_model_info(model)
-        
-        self.assertIn('total_parameters', info)
-        self.assertIn('trainable_parameters', info)
-        self.assertIn('size_mb', info)
-        self.assertIn('model_type', info)
-        
-        self.assertGreater(info['total_parameters'], 0)
-        self.assertGreater(info['size_mb'], 0)
-    
-    def test_invalid_model_type(self):
-        """Test that invalid model type raises ValueError."""
-        from models_with_yolo import create_client_model
-        
-        with self.assertRaises(ValueError):
-            create_client_model('invalid_model_type', embedding_dim=64)
-
-
 class TestHospitalNaming(unittest.TestCase):
     """Test that hospital naming is used correctly."""
     
@@ -321,16 +234,15 @@ class TestHospitalNaming(unittest.TestCase):
 def run_tests():
     """Run all tests."""
     print("="*80)
-    print("Running Tests for ZIP Dataset Loader and YOLO Models")
+    print("Running Tests for ZIP Dataset Loader")
     print("="*80)
-    
+
     # Create test suite
     loader = unittest.TestLoader()
     suite = unittest.TestSuite()
-    
+
     # Add test classes
     suite.addTests(loader.loadTestsFromTestCase(TestZipDatasetLoader))
-    suite.addTests(loader.loadTestsFromTestCase(TestYOLOModels))
     suite.addTests(loader.loadTestsFromTestCase(TestHospitalNaming))
     
     # Run tests

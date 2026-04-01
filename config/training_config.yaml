@@ -13,8 +13,6 @@ models:
     enabled: true
   - name: efficientnet_b0
     enabled: true
-  - name: mobilenet_v2
-    enabled: true
 
 dataset:
   data_dir: "data/SplitCovid19"

@@ -50,7 +50,7 @@ def get_inference_engine(_version_id=None):
     ckpt_dir = repo_root / "outputs" / "checkpoints"
 
     # Try VFLFramework checkpoints first (newest by mtime)
-    preferred_order = ["resnet18", "densenet121", "efficientnet_b0", "mobilenet_v2"]
+    preferred_order = ["resnet18", "densenet121", "efficientnet_b0"]
     found_ckpt = None
     found_backbone = None
     for backbone in preferred_order:
