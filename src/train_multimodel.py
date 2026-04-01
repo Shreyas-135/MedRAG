@@ -262,7 +262,8 @@ def register_checkpoint(
     best_val_f1: float,
     cfg: Dict,
     round_num: int = 1,
-) -> Optional[str]:
+    checkpoint_hash: Optional[str] = None,
+) -> Tuple[Optional[str], Optional[str]]:
     """
     Register a saved checkpoint in :class:`~model_registry.ModelRegistry`.
 
@@ -272,8 +273,10 @@ def register_checkpoint(
 
     Args:
         round_num: Training round number (default 1 for single-run pipelines).
+        checkpoint_hash: Pre-computed SHA-256 hex digest of the checkpoint file.
+            If ``None`` the hash is computed here by reading the file.
 
-    Returns the ``version_id`` string, or ``None`` on failure.
+    Returns ``(version_id, sha256_hex)`` on success, or ``(None, None)`` on failure.
     """
     try:
         from model_registry import ModelRegistry, ModelVersion  # noqa: F401
@@ -282,10 +285,15 @@ def register_checkpoint(
         registry_dir = os.path.join(repo_root, "models", "registry")
         registry = ModelRegistry(registry_dir=registry_dir)
 
-        # Compute a lightweight hash from checkpoint file size + path
-        file_hash = hashlib.sha256(
-            (ckpt_path + str(os.path.getsize(ckpt_path))).encode()
-        ).hexdigest()
+        # Use the pre-computed hash when available; otherwise hash the file now
+        if checkpoint_hash is not None:
+            file_hash = checkpoint_hash
+        else:
+            _sha256 = hashlib.sha256()
+            with open(ckpt_path, "rb") as _f:
+                for _chunk in iter(lambda: _f.read(65536), b""):
+                    _sha256.update(_chunk)
+            file_hash = _sha256.hexdigest()
 
         timestamp = datetime.now()
         version_id = (
@@ -296,13 +304,22 @@ def register_checkpoint(
             version_id=version_id,
             round_num=round_num,
             metrics={
-                "test_accuracy": round(metrics.get("accuracy", 0.0) * 100, 2),
-                "f1_macro":      metrics.get("f1_macro", 0.0),
-                "roc_auc_macro": metrics.get("roc_auc_macro", 0.0),
-                "best_val_f1":   best_val_f1,
+                # test_accuracy kept as percent (0-100) for webapp display
+                "test_accuracy":  round(metrics.get("accuracy", 0.0) * 100, 2),
+                # Standard float (0-1) keys as required by problem spec
+                "accuracy":       round(metrics.get("accuracy", 0.0), 4),
+                "f1":             round(metrics.get("f1_macro", 0.0), 4),
+                "roc_auc":        round(metrics.get("roc_auc_macro", 0.0), 4),
+                "f1_macro":       metrics.get("f1_macro", 0.0),
+                "f1_weighted":    metrics.get("f1_weighted", 0.0),
+                "roc_auc_macro":  metrics.get("roc_auc_macro", 0.0),
+                "precision_macro": metrics.get("precision_macro", 0.0),
+                "recall_macro":    metrics.get("recall_macro", 0.0),
+                "best_val_f1":    best_val_f1,
             },
             config={
                 "backbone_name": model_name,
+                "backbone":      model_name,
                 "hospital":      HOSPITAL_MAP.get(model_name, model_name),
                 "class_names":   class_names,
                 "checkpoint_path": ckpt_path,
@@ -315,10 +332,45 @@ def register_checkpoint(
         )
         version_id = registry.register_entry(version)
         print(f"  ModelRegistry: registered '{version_id}'")
-        return version_id
+
+        # ── Mirror to outputs/model_registry.json ──────────────────────────
+        # This provides a flat, human-readable JSON at the well-known path
+        # outputs/model_registry.json alongside the canonical models/registry/
+        outputs_dir = os.path.join(repo_root, "outputs")
+        os.makedirs(outputs_dir, exist_ok=True)
+        mirror_path = os.path.join(outputs_dir, "model_registry.json")
+        try:
+            with open(mirror_path, encoding="utf-8") as _mf:
+                mirror_data = json.load(_mf)
+        except (FileNotFoundError, json.JSONDecodeError):
+            mirror_data = {}
+
+        mirror_data[version_id] = {
+            "version_id":      version_id,
+            "backbone":        model_name,
+            "model_name":      model_name,
+            "hospital":        HOSPITAL_MAP.get(model_name, model_name),
+            "checkpoint_path": ckpt_path,
+            "timestamp":       timestamp.isoformat(),
+            "sha256":          file_hash,
+            "metrics": {
+                "accuracy":        round(metrics.get("accuracy", 0.0), 4),
+                "roc_auc":         round(metrics.get("roc_auc_macro", 0.0), 4),
+                "f1":              round(metrics.get("f1_macro", 0.0), 4),
+                "f1_weighted":     round(metrics.get("f1_weighted", 0.0), 4),
+                "precision_macro": round(metrics.get("precision_macro", 0.0), 4),
+                "recall_macro":    round(metrics.get("recall_macro", 0.0), 4),
+                "best_val_f1":     round(best_val_f1, 4),
+            },
+        }
+        with open(mirror_path, "w", encoding="utf-8") as _mf:
+            json.dump(mirror_data, _mf, indent=2)
+        print(f"  outputs/model_registry.json updated: {mirror_path}")
+
+        return version_id, file_hash
     except Exception as exc:
         print(f"  Warning: ModelRegistry registration failed: {exc}")
-        return None
+        return None, None
 
 
 # ─────────────────────────── Dataset helpers ──────────────────────────────────
@@ -857,15 +909,42 @@ def train_model(
         torch.save(ckpt_payload, versioned_path)
         print(f"  Versioned checkpoint: {versioned_path}")
 
+        # Compute SHA-256 once and reuse in register_checkpoint + blockchain log
+        _ckpt_sha = hashlib.sha256()
+        with open(ckpt_path, "rb") as _cf:
+            for _chunk in iter(lambda: _cf.read(65536), b""):
+                _ckpt_sha.update(_chunk)
+        ckpt_file_hash = _ckpt_sha.hexdigest()
+
         # Register in ModelRegistry (outputs/model_registry.json via models/registry/)
-        register_checkpoint(
+        version_id, _ = register_checkpoint(
             model_name=model_name,
             ckpt_path=ckpt_path,
             metrics=final_metrics,
             class_names=class_names,
             best_val_f1=best_val_f1,
             cfg=cfg,
+            checkpoint_hash=ckpt_file_hash,
         )
+
+        # Log checkpoint hash to blockchain ledger when saving best checkpoint
+        if ledger is not None and version_id is not None:
+            try:
+                ledger.log_training_round(
+                    round_num=-1,  # -1 = checkpoint-save event (distinct from epoch rounds)
+                    node_metrics={
+                        HOSPITAL_MAP.get(model_name, model_name): {
+                            "event": "best_checkpoint_saved",
+                            "version_id": version_id,
+                            "backbone": model_name,
+                            "best_val_f1": best_val_f1,
+                        }
+                    },
+                    model_hash=ckpt_file_hash,
+                )
+                print(f"  Blockchain: checkpoint hash logged for '{version_id}'")
+            except Exception as _bc_exc:
+                print(f"  Warning: Blockchain checkpoint log failed: {_bc_exc}")
 
     return model, history, final_metrics
 
