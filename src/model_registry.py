@@ -29,15 +29,26 @@ class ModelVersion:
     
     def to_dict(self) -> Dict:
         """Convert to dictionary for JSON serialization."""
-        return {
+        d = {
             'version_id': self.version_id,
             'round_num': self.round_num,
             'metrics': self.metrics,
             'config': self.config,
             'model_hash': self.model_hash,
+            'sha256': self.model_hash,
             'timestamp': self.timestamp,
-            'checkpoint_path': self.checkpoint_path
+            'checkpoint_path': self.checkpoint_path,
         }
+        # Promote backbone / hospital to top level for registry readability
+        if isinstance(self.config, dict):
+            backbone = self.config.get('backbone_name') or self.config.get('backbone')
+            if backbone:
+                d['backbone'] = backbone
+                d['model_name'] = backbone
+            hospital = self.config.get('hospital')
+            if hospital:
+                d['hospital'] = hospital
+        return d
     
     @classmethod
     def from_dict(cls, data: Dict) -> 'ModelVersion':
