@@ -234,13 +234,26 @@ if selected_version_id:
         
         with col1:
             st.markdown("### 📋 Basic Information")
+            checkpoint_path = Path(selected_version.checkpoint_path)
+            # Resolve relative to repo root when the stored path is absolute
+            # and does not exist on this machine (e.g. a Kaggle absolute path).
+            if not checkpoint_path.is_file():
+                repo_root = Path(__file__).parent.parent.parent
+                candidate = repo_root / checkpoint_path.name
+                if candidate.is_file():
+                    checkpoint_path = candidate
+            _ckpt_exists = checkpoint_path.is_file()
+            try:
+                _ckpt_size_mb = checkpoint_path.stat().st_size / (1024 * 1024) if _ckpt_exists else None
+            except OSError:
+                _ckpt_size_mb = None
             st.markdown(f"""
             - **Version ID**: `{selected_version.version_id[:32]}...`
             - **Training Round**: {selected_version.round_num}
             - **Created**: {format_timestamp(selected_version.timestamp)}
             - **Model Hash**: `{selected_version.model_hash[:32]}...`
             - **Checkpoint**: `{Path(selected_version.checkpoint_path).name}`
-            - **File Size**: {Path(selected_version.checkpoint_path).stat().st_size / (1024*1024):.2f} MB
+            - **File Size**: {f"{_ckpt_size_mb:.2f} MB" if _ckpt_size_mb is not None else "N/A (file not found on this machine)"}
             """)
             
             st.markdown("### ⚙️ Training Configuration")
@@ -279,23 +292,32 @@ if selected_version_id:
         
         # Download section
         st.markdown("### 💾 Export Model")
-        checkpoint_path = Path(selected_version.checkpoint_path)
+        # Resolve checkpoint path relative to repo root if the stored
+        # absolute path (e.g. a Kaggle path) no longer exists here.
+        _ckpt_path = Path(selected_version.checkpoint_path)
+        if not _ckpt_path.is_file():
+            _repo_root = Path(__file__).parent.parent.parent
+            _candidate = _repo_root / _ckpt_path.name
+            if _candidate.is_file():
+                _ckpt_path = _candidate
         
         col1, col2, col3 = st.columns(3)
         
         with col1:
-            if checkpoint_path.exists():
-                file_size_mb = checkpoint_path.stat().st_size / (1024 * 1024)
+            if _ckpt_path.is_file():
+                file_size_mb = _ckpt_path.stat().st_size / (1024 * 1024)
                 st.info(f"📦 Size: {file_size_mb:.2f} MB")
                 
-                with open(checkpoint_path, 'rb') as f:
+                with open(_ckpt_path, 'rb') as f:
                     st.download_button(
                         label="📥 Download Checkpoint",
                         data=f,
-                        file_name=checkpoint_path.name,
+                        file_name=_ckpt_path.name,
                         mime='application/octet-stream',
                         use_container_width=True
                     )
+            else:
+                st.warning(f"⚠️ Checkpoint file not found:\n`{selected_version.checkpoint_path}`")
         
         with col2:
             # Export model metadata

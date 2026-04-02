@@ -7,3 +7,4 @@ torchvision>=0.15.0
 plotly>=5.18.0
 web3>=6.0.0
 python-dotenv>=1.0.0
+reportlab>=4.0.0
