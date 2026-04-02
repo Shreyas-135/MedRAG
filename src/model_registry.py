@@ -95,25 +95,108 @@ class ModelRegistry:
         
         # Create directories if they don't exist
         self.checkpoint_dir.mkdir(parents=True, exist_ok=True)
+
+        # Bootstrap an empty registry file so git-tracked structure is valid
+        if not self.registry_file.exists():
+            try:
+                self.registry_file.write_text('{}')
+            except OSError as exc:
+                print(f"Warning: Could not create registry file: {exc}")
         
         # Load existing registry or create new
         self.versions: Dict[str, ModelVersion] = {}
         self._load_registry()
+
+    # ------------------------------------------------------------------
+    # Kaggle / absolute-path helpers
+    # ------------------------------------------------------------------
+
+    # Kaggle writes absolute paths like /kaggle/working/MedRAG/…
+    _KAGGLE_PREFIX = Path('/kaggle/working/MedRAG')
+
+    def _resolve_checkpoint_path(self, checkpoint_path: str) -> Path:
+        """Resolve a checkpoint path to an existing local file if possible.
+
+        Handles three cases:
+
+        1. Path already exists as-is (absolute or relative) → return it.
+        2. Absolute Kaggle path (``/kaggle/working/MedRAG/…``) → strip the
+           Kaggle prefix and re-anchor relative to the repo root.
+        3. Any absolute path whose basename matches a file in the local
+           ``checkpoints/`` directory → use the local copy.
+
+        If none of the above yield an existing file the raw path is returned
+        unchanged so callers can decide how to handle a missing checkpoint.
+        """
+        p = Path(checkpoint_path)
+
+        # Case 1: already accessible
+        if p.exists():
+            return p
+
+        repo_root = Path(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
+        if p.is_absolute():
+            # Case 2: strip Kaggle prefix
+            try:
+                rel = p.relative_to(self._KAGGLE_PREFIX)
+                candidate = repo_root / rel
+                if candidate.exists():
+                    return candidate
+                # Best-guess repo-relative path even if file is absent
+                best_guess = candidate
+            except ValueError:
+                best_guess = p
+
+            # Case 3: filename only – look in local checkpoints dir
+            local = self.checkpoint_dir / p.name
+            if local.exists():
+                return local
+
+            return best_guess
+        else:
+            # Relative path – resolve from repo root first, then as-is
+            candidate = repo_root / p
+            if candidate.exists():
+                return candidate
+            return p
     
     def _load_registry(self):
-        """Load registry from JSON file."""
-        if self.registry_file.exists():
-            try:
-                with open(self.registry_file, 'r') as f:
-                    data = json.load(f)
-                    self.versions = {
-                        vid: ModelVersion.from_dict(vdata) 
-                        for vid, vdata in data.items()
-                    }
-            except Exception as e:
-                print(f"Warning: Could not load registry: {e}")
+        """Load registry from JSON file, handling empty or invalid JSON gracefully."""
+        if not self.registry_file.exists():
+            self.versions = {}
+            return
+
+        try:
+            raw = self.registry_file.read_text(encoding='utf-8').strip()
+            if not raw:
+                print("Warning: registry.json is empty; treating as empty registry.")
                 self.versions = {}
-        else:
+                return
+
+            data = json.loads(raw)
+
+            if not isinstance(data, dict):
+                print(
+                    f"Warning: registry.json has unexpected type "
+                    f"({type(data).__name__}); treating as empty registry."
+                )
+                self.versions = {}
+                return
+
+            loaded: Dict[str, ModelVersion] = {}
+            for vid, vdata in data.items():
+                try:
+                    loaded[vid] = ModelVersion.from_dict(vdata)
+                except Exception as entry_exc:
+                    print(f"Warning: Skipping registry entry '{vid}': {entry_exc}")
+            self.versions = loaded
+
+        except json.JSONDecodeError as exc:
+            print(f"Warning: registry.json contains invalid JSON ({exc}); treating as empty registry.")
+            self.versions = {}
+        except Exception as e:
+            print(f"Warning: Could not load registry: {e}")
             self.versions = {}
     
     def _save_registry(self):
@@ -231,7 +314,7 @@ class ModelRegistry:
             raise ValueError(f"Version {version_id} not found in registry")
         
         version = self.versions[version_id]
-        checkpoint_path = Path(version.checkpoint_path)
+        checkpoint_path = self._resolve_checkpoint_path(version.checkpoint_path)
         
         if not checkpoint_path.exists():
             raise FileNotFoundError(f"Checkpoint not found: {checkpoint_path}")
@@ -343,11 +426,11 @@ class ModelRegistry:
             }
         
         # Calculate total storage size
-        total_size = sum(
-            os.path.getsize(Path(v.checkpoint_path)) 
-            for v in self.versions.values()
-            if Path(v.checkpoint_path).exists()
-        )
+        total_size = 0
+        for v in self.versions.values():
+            resolved = self._resolve_checkpoint_path(v.checkpoint_path)
+            if resolved.exists():
+                total_size += resolved.stat().st_size
         
         latest = max(self.versions.values(), key=lambda v: v.timestamp)
         best = self.get_best_model('accuracy')
