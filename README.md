@@ -71,11 +71,18 @@ cd webapp
 streamlit run app.py
 ```
 
-The UI (Inference page) will automatically load the best available VFLFramework checkpoint from `outputs/checkpoints/` and display:
-- Predicted class + confidence bar
-- Per-class probability metrics
-- RAG explanation text
-- Clickable citation list with source links and evidence snippets
+The UI (Inference page) will automatically load all available VFLFramework checkpoints from `outputs/checkpoints/` and display:
+- Weighted-average ensemble prediction across ResNet-18, DenseNet-121, and EfficientNet-B0 (virtual hospitals)
+- Per-class probability metrics and per-hospital breakdown
+- RAG explanation text and clickable guideline citations
+- Grad-CAM activation maps per backbone (embedded in-page and in the PDF)
+- **📥 Download Clinician Report (PDF)** – a full A4 clinician-grade PDF report with patient info, primary impression, differential diagnosis, per-hospital table, agreement indicator, RAG citations, Grad-CAM visuals, and audit metadata
+
+> **Dependency:** PDF generation requires **reportlab** (`pip install reportlab`).  
+> It is included in `webapp/requirements.txt`. Install all webapp deps with:
+> ```bash
+> pip install -r webapp/requirements.txt
+> ```
 
 ### Architecture
 The pipeline implements:

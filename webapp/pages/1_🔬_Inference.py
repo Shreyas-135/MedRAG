@@ -21,6 +21,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..',
 
 from webapp.utils import (
     get_inference_engine,
+    get_ensemble_engine,
     get_model_registry,
     get_ledger,
     display_system_status,
@@ -28,6 +29,7 @@ from webapp.utils import (
     display_success_message,
     display_info_message,
     check_model_governance_approval,
+    generate_clinician_pdf,
 )
 
 st.set_page_config(
@@ -37,7 +39,11 @@ st.set_page_config(
 )
 
 st.title("🔬 X-Ray Analysis & Prediction")
-st.markdown("Upload a chest X-ray image for AI-powered COVID-19 detection with RAG-enhanced explanations.")
+st.markdown(
+    "Upload a chest X-ray image for AI-powered multi-class detection using "
+    "a weighted-average ensemble of three virtual hospital backbones "
+    "(ResNet-18 · DenseNet-121 · EfficientNet-B0) with clinician-grade reporting."
+)
 
 # Display system status in sidebar
 display_system_status()
@@ -49,6 +55,29 @@ if 'prov_verified' not in st.session_state:
     st.session_state['prov_verified'] = False
 if 'admin_override' not in st.session_state:
     st.session_state['admin_override'] = False
+
+# ============================================================================
+# Optional Patient Information (sidebar / expander)
+# ============================================================================
+with st.expander("👤 Patient Information (optional)", expanded=False):
+    pi_col1, pi_col2 = st.columns(2)
+    with pi_col1:
+        pt_name   = st.text_input("Patient Name",          placeholder="e.g. Jane Doe")
+        pt_id     = st.text_input("Patient ID",            placeholder="e.g. PT-00123")
+        pt_dob    = st.text_input("Date of Birth",         placeholder="YYYY-MM-DD")
+    with pi_col2:
+        pt_date   = st.text_input("Study Date",            placeholder="YYYY-MM-DD")
+        pt_ref    = st.text_input("Referring Physician",   placeholder="e.g. Dr. Smith")
+        pt_notes  = st.text_area("Clinical Notes",         placeholder="Symptoms, history …", height=68)
+
+patient_info = {
+    "name":                 pt_name,
+    "patient_id":           pt_id,
+    "dob":                  pt_dob,
+    "study_date":           pt_date,
+    "referring_physician":  pt_ref,
+    "notes":                pt_notes,
+}
 
 # ============================================================================
 # Main content
@@ -141,18 +170,30 @@ with col2:
             f.write(uploaded_file.getbuffer())
         
         try:
-            # Get inference engine
-            with st.spinner("Loading inference model..."):
-                version_id = selected_version if selected_version != "Latest Model" else None
-                inference = get_inference_engine(_version_id=version_id)
-            
-            if inference is None:
-                display_error_message("Failed to load inference engine")
+            # ----------------------------------------------------------------
+            # Try weighted-ensemble engine first; fall back to single-model
+            # ----------------------------------------------------------------
+            result = None
+            inference_mode = "ensemble"
+
+            with st.spinner("Loading inference models (weighted ensemble)…"):
+                ensemble_engine = get_ensemble_engine()
+
+            if ensemble_engine is not None:
+                with st.spinner("Analyzing X-ray with weighted ensemble…"):
+                    result = ensemble_engine.predict(str(temp_path), return_gradcam=True)
             else:
-                # Run inference
-                with st.spinner("Analyzing X-ray image..."):
-                    result = inference.predict(str(temp_path), return_explanations=True)
-                
+                inference_mode = "single"
+                with st.spinner("Loading single-model inference engine…"):
+                    version_id = selected_version if selected_version != "Latest Model" else None
+                    inference = get_inference_engine(_version_id=version_id)
+                if inference is None:
+                    display_error_message("Failed to load inference engine")
+                else:
+                    with st.spinner("Analyzing X-ray image…"):
+                        result = inference.predict(str(temp_path), return_explanations=True)
+
+            if result is not None:
                 # Log access to ledger
                 ledger = get_ledger()
                 ledger.log_access(
@@ -162,8 +203,15 @@ with col2:
                     status="success",
                     details=result
                 )
-                
+
+                # Store result in session state for PDF generation
+                st.session_state['last_result']    = result
+                st.session_state['last_temp_path'] = str(temp_path)
+                st.session_state['last_patient_info'] = patient_info
+
+                # ────────────────────────────────────────────────────────────
                 # Display results
+                # ────────────────────────────────────────────────────────────
                 st.markdown("---")
 
                 prediction = result['prediction']
@@ -175,9 +223,15 @@ with col2:
                 st.markdown(f"**Confidence:** {confidence:.1%}")
                 st.progress(confidence)
 
+                # Uncertainty / Review flag
+                if result.get("needs_review", False):
+                    st.warning(
+                        f"⚠️ **NEEDS RADIOLOGIST REVIEW** — {result.get('review_reason', '')}"
+                    )
+
                 st.markdown("---")
 
-                # Probabilities (render dynamically; don't hardcode keys)
+                # Probabilities
                 st.markdown("### 📊 Class Probabilities")
                 probabilities = result.get("probabilities") or {}
                 items = list(probabilities.items())
@@ -190,6 +244,24 @@ with col2:
                             st.metric(str(cls).replace("_", " ").title(), f"{float(prob):.1%}")
 
                 st.markdown("---")
+
+                # Per-Hospital Predictions (ensemble mode only)
+                per_hospital = result.get("per_hospital")
+                if per_hospital:
+                    st.markdown("### 🏥 Per-Hospital Predictions")
+                    ph_cols = st.columns(len(per_hospital))
+                    for idx, (hosp, info) in enumerate(per_hospital.items()):
+                        with ph_cols[idx]:
+                            st.markdown(f"**{hosp}**")
+                            st.markdown(
+                                f"*{info.get('backbone','?')}* · weight {info.get('weight',0):.0%}"
+                            )
+                            st.metric(
+                                info.get("prediction", "?").replace("_", " ").title(),
+                                f"{info.get('confidence', 0):.1%}",
+                            )
+
+                    st.markdown("---")
 
                 # RAG Explanation
                 st.markdown("### 🧠 RAG Explanation")
@@ -227,16 +299,80 @@ with col2:
 
                 st.markdown("---")
 
+                # Grad-CAM Visualisations
+                gradcam_images = result.get("gradcam_images", {})
+                valid_gcams = {k: v for k, v in gradcam_images.items() if v is not None}
+                if valid_gcams:
+                    st.markdown("### 🗺️ Grad-CAM Activation Maps")
+                    gcam_cols = st.columns(len(valid_gcams))
+                    hospital_labels = {
+                        "resnet18": "Hospital_A",
+                        "densenet121": "Hospital_B",
+                        "efficientnet_b0": "Hospital_C",
+                    }
+                    for idx, (backbone, pil_img) in enumerate(valid_gcams.items()):
+                        with gcam_cols[idx]:
+                            st.image(
+                                pil_img,
+                                caption=f"{hospital_labels.get(backbone, backbone)} ({backbone})",
+                                use_column_width=True,
+                            )
+                    st.markdown("---")
+
                 # Technical Details
                 with st.expander("🔧 Technical Details"):
                     st.markdown(f"""
                     - **Model Type**: {result['model_type']}
                     - **Inference Time**: {result['inference_time']:.3f} seconds
+                    - **Backbones**: {', '.join(result.get('ensemble_weights', {}).keys()) or 'N/A'}
                     - **Model Version**: {selected_version}
                     - **Image**: {uploaded_file.name}
                     """)
 
-                # ---- Export gate ----
+                # ---- Clinician PDF Report download ----
+                st.markdown("---")
+                st.markdown("### 📄 Clinician Report")
+
+                # Gather version info for audit section
+                _version_info_dict = {}
+                if selected_version and selected_version != "Latest Model":
+                    _vi = registry.get_version(selected_version)
+                    if _vi:
+                        _version_info_dict = {
+                            "version_id": _vi.version_id,
+                            "model_hash": _vi.model_hash,
+                            "timestamp":  _vi.timestamp,
+                        }
+
+                try:
+                    pdf_bytes = generate_clinician_pdf(
+                        result=result,
+                        patient_info=patient_info,
+                        image_path=str(temp_path),
+                        model_version_info=_version_info_dict,
+                    )
+                    _base_name = (
+                        uploaded_file.name.rsplit(".", 1)[0]
+                        if "." in uploaded_file.name
+                        else uploaded_file.name
+                    )
+                    st.download_button(
+                        label="📥 Download Clinician Report (PDF)",
+                        data=pdf_bytes,
+                        file_name=f"medrag_report_{_base_name}.pdf",
+                        mime="application/pdf",
+                        use_container_width=True,
+                        type="primary",
+                    )
+                except ImportError:
+                    st.warning(
+                        "⚠️ PDF generation requires **reportlab**. "
+                        "Install it with: `pip install reportlab`"
+                    )
+                except Exception as _pdf_err:
+                    st.warning(f"⚠️ Could not generate PDF: {_pdf_err}")
+
+                # ---- Provenance / JSON export gate ----
                 _can_export = (
                     st.session_state.get('prov_verified', False)
                     or st.session_state.get('admin_override', False)
@@ -247,6 +383,7 @@ with col2:
                         "prediction": result.get('prediction'),
                         "confidence": result.get('confidence'),
                         "probabilities": result.get('probabilities'),
+                        "per_hospital": result.get('per_hospital'),
                         "provenance": st.session_state.get('prov_bundle'),
                         "tx_hash": st.session_state.get('prov_tx_hash'),
                         "anchor_info": st.session_state.get('prov_anchor_info'),
@@ -264,7 +401,7 @@ with col2:
                     )
                 else:
                     st.info(
-                        "🔒 Export locked – anchor provenance on-chain (Step 3) to enable download."
+                        "🔒 JSON provenance export locked – anchor provenance on-chain (Step 3) to enable."
                     )
 
                 display_success_message("Analysis complete!")
@@ -284,3 +421,4 @@ with col2:
     
     elif uploaded_file is None:
         display_info_message("👆 Please upload an X-ray image to begin analysis")
+

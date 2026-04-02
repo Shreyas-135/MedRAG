@@ -9,6 +9,7 @@ import torchvision.transforms as transforms
 from PIL import Image
 import numpy as np
 import os
+from pathlib import Path
 from typing import Dict, List, Tuple, Optional, Any
 import time
 
@@ -817,6 +818,302 @@ def load_vfl_model(
         model.load_state_dict(state_dict)
 
     return VFLInferenceEngine(model=model, class_names=resolved_classes)
+
+
+# ============================================================================
+# Multi-Model Weighted Ensemble Inference Engine
+# ============================================================================
+
+# Default ensemble weights matching train_multimodel.ENSEMBLE_WEIGHTS
+_ENSEMBLE_WEIGHTS: Dict[str, float] = {
+    "resnet18":        0.30,
+    "densenet121":     0.40,
+    "efficientnet_b0": 0.30,
+}
+
+_HOSPITAL_MAP: Dict[str, str] = {
+    "resnet18":        "Hospital_A",
+    "densenet121":     "Hospital_B",
+    "efficientnet_b0": "Hospital_C",
+}
+
+# Confidence threshold below which we flag NEEDS RADIOLOGIST REVIEW.
+# 0.60 is a conservative clinical threshold: below 60% the model is uncertain
+# enough that a human radiologist should verify the finding before acting on it.
+_LOW_CONFIDENCE_THRESHOLD = 0.60
+
+# Image size and normalisation constants used in preprocessing
+_GRADCAM_IMG_SIZE = (224, 224)
+_IMAGENET_MEAN = [0.485, 0.456, 0.406]
+_IMAGENET_STD  = [0.229, 0.224, 0.225]
+
+
+def _generate_gradcam_pil(
+    model: "torch.nn.Module",
+    image_path: str,
+) -> Optional["Image.Image"]:
+    """
+    Generate a Grad-CAM overlay PIL Image entirely in memory.
+
+    Returns ``None`` if pytorch-grad-cam is not installed or if the model
+    has no Conv2d layers to hook.
+    """
+    try:
+        import numpy as _np
+        from PIL import Image as _PILImage
+        import torchvision.transforms as _T
+        from pytorch_grad_cam import GradCAM
+        from pytorch_grad_cam.utils.image import show_cam_on_image
+
+        # Find all Conv2d layers; take the last one as target
+        target_layers = [
+            m for _, m in model.named_modules()
+            if isinstance(m, torch.nn.Conv2d)
+        ]
+        if not target_layers:
+            return None
+
+        _transform = _T.Compose([
+            _T.Resize(_GRADCAM_IMG_SIZE),
+            _T.ToTensor(),
+            _T.Normalize(_IMAGENET_MEAN, _IMAGENET_STD),
+        ])
+
+        orig_img = _PILImage.open(image_path).convert("RGB").resize(_GRADCAM_IMG_SIZE)
+        orig_np = _np.array(orig_img, dtype=_np.float32) / 255.0
+
+        input_tensor = _transform(
+            _PILImage.open(image_path).convert("RGB")
+        ).unsqueeze(0)
+
+        cam = GradCAM(model=model, target_layers=[target_layers[-1]])
+        grayscale_cam = cam(input_tensor=input_tensor)[0]
+
+        vis = show_cam_on_image(orig_np, grayscale_cam, use_rgb=True)
+        return _PILImage.fromarray(vis)
+    except Exception:
+        return None
+
+
+class MultiModelEnsembleEngine:
+    """
+    Weighted-average ensemble inference over multiple VFLFramework models.
+
+    Each backbone (resnet18, densenet121, efficientnet_b0) acts as a virtual
+    hospital.  Predictions are aggregated as a normalised weighted average of
+    per-model softmax probability vectors (same formula as
+    ``train_multimodel.weighted_ensemble_predict``).
+
+    Args:
+        engines : mapping of ``backbone_name`` → :class:`VFLInferenceEngine`
+        weights : per-backbone weight (defaults to :data:`_ENSEMBLE_WEIGHTS`)
+    """
+
+    def __init__(
+        self,
+        engines: Dict[str, "VFLInferenceEngine"],
+        weights: Optional[Dict[str, float]] = None,
+    ):
+        if not engines:
+            raise ValueError("engines dict must contain at least one engine")
+        self.engines = engines
+        self.weights = weights if weights is not None else _ENSEMBLE_WEIGHTS
+        # Infer class names from the first available engine
+        first_engine = next(iter(engines.values()))
+        self.class_names: List[str] = first_engine.class_names
+
+    # ------------------------------------------------------------------
+    def predict(
+        self,
+        image_path: str,
+        return_gradcam: bool = True,
+    ) -> Dict[str, Any]:
+        """
+        Run weighted ensemble inference on a single image.
+
+        Returns a dict compatible with the existing webapp result schema,
+        extended with ``per_hospital``, ``needs_review``, ``review_reason``,
+        and ``gradcam_images`` keys.
+        """
+        start = time.time()
+
+        per_hospital: Dict[str, Any] = {}
+        per_probs: Dict[str, np.ndarray] = {}
+
+        for backbone, engine in self.engines.items():
+            try:
+                res = engine.predict(image_path, return_explanations=False)
+                probs_arr = np.array(
+                    [res["probabilities"].get(c, 0.0) for c in self.class_names],
+                    dtype=np.float64,
+                )
+                per_probs[backbone] = probs_arr
+                per_hospital[_HOSPITAL_MAP.get(backbone, backbone)] = {
+                    "backbone":    backbone,
+                    "prediction":  res["prediction"],
+                    "confidence":  res["confidence"],
+                    "probabilities": res["probabilities"],
+                    "weight":      self.weights.get(backbone, 1.0 / len(self.engines)),
+                }
+            except Exception as exc:
+                print(f"Warning: engine {backbone} failed: {exc}")
+
+        if not per_probs:
+            raise RuntimeError("All backbone engines failed during ensemble inference")
+
+        # Weighted average aggregation
+        present = list(per_probs)
+        default_w = 1.0 / len(present)
+        w_sum = sum(self.weights.get(n, default_w) for n in present)
+        aggregated = np.zeros(len(self.class_names), dtype=np.float64)
+        for name, probs in per_probs.items():
+            w = self.weights.get(name, default_w) / w_sum
+            aggregated += w * probs
+
+        pred_idx = int(np.argmax(aggregated))
+        pred_class = self.class_names[pred_idx]
+        confidence_val = float(aggregated[pred_idx])
+
+        # Agreement / uncertainty analysis
+        top_preds = [
+            ph["prediction"]
+            for ph in per_hospital.values()
+        ]
+        unique_preds = set(top_preds)
+        high_disagreement = len(unique_preds) > 1
+        low_confidence = confidence_val < _LOW_CONFIDENCE_THRESHOLD
+        needs_review = high_disagreement or low_confidence
+
+        if high_disagreement and low_confidence:
+            review_reason = (
+                f"Low ensemble confidence ({confidence_val:.1%}) and "
+                f"hospital disagreement ({', '.join(sorted(unique_preds))})"
+            )
+        elif high_disagreement:
+            review_reason = (
+                f"Hospital disagreement: "
+                + ", ".join(
+                    f"{h}→{d['prediction']}"
+                    for h, d in per_hospital.items()
+                )
+            )
+        elif low_confidence:
+            review_reason = (
+                f"Low ensemble confidence ({confidence_val:.1%})"
+            )
+        else:
+            review_reason = ""
+
+        # RAG explanation + citations (use first engine's template)
+        first_engine = next(iter(self.engines.values()))
+        explanation_text = _RADIOLOGY_TEMPLATES.get(
+            pred_class,
+            f"Model predicted {pred_class} with confidence {confidence_val:.1%}.",
+        ).format(confidence=confidence_val)
+        citations = _MEDICAL_CITATIONS.get(pred_class, [])
+
+        # Grad-CAM images in memory
+        gradcam_images: Dict[str, Any] = {}
+        if return_gradcam:
+            for backbone, engine in self.engines.items():
+                gradcam_images[backbone] = _generate_gradcam_pil(
+                    engine.model, image_path
+                )
+
+        return {
+            "prediction":       pred_class,
+            "confidence":       confidence_val,
+            "probabilities":    {
+                c: float(aggregated[i])
+                for i, c in enumerate(self.class_names)
+            },
+            "per_hospital":     per_hospital,
+            "ensemble_weights": {
+                n: self.weights.get(n, default_w)
+                for n in present
+            },
+            "needs_review":     needs_review,
+            "review_reason":    review_reason,
+            "explanation_text": explanation_text,
+            "citations":        citations,
+            "gradcam_images":   gradcam_images,
+            "inference_time":   time.time() - start,
+            "model_type":       f"Weighted Ensemble VFL ({len(self.engines)} backbones)",
+            "num_models":       len(self.engines),
+        }
+
+
+def load_multi_model_ensemble(
+    checkpoints_dir: str = None,
+    class_names: List[str] = None,
+    weights: Optional[Dict[str, float]] = None,
+) -> "MultiModelEnsembleEngine":
+    """
+    Load all available VFLFramework checkpoints from *checkpoints_dir* and
+    return a :class:`MultiModelEnsembleEngine`.
+
+    If a backbone checkpoint file is missing the backbone is silently skipped
+    (so the ensemble degrades gracefully to however many models are present).
+
+    Args:
+        checkpoints_dir : Directory containing ``{backbone}_best.pth`` files.
+                          Defaults to ``<repo_root>/outputs/checkpoints/``.
+        class_names     : Override class names for all engines.
+        weights         : Per-backbone weights (defaults to :data:`_ENSEMBLE_WEIGHTS`).
+
+    Returns:
+        :class:`MultiModelEnsembleEngine` with at least one engine loaded.
+
+    Raises:
+        ``RuntimeError`` if no checkpoint is found.
+    """
+    if checkpoints_dir is None:
+        # Repo-relative path — works on any OS (no hardcoded /kaggle paths)
+        checkpoints_dir = str(
+            Path(__file__).parent.parent / "outputs" / "checkpoints"
+        )
+
+    backbones = ["resnet18", "densenet121", "efficientnet_b0"]
+    engines: Dict[str, VFLInferenceEngine] = {}
+
+    for backbone in backbones:
+        ckpt = Path(checkpoints_dir) / f"{backbone}_best.pth"
+        if ckpt.is_file():
+            try:
+                engine = load_vfl_model(
+                    checkpoint_path=str(ckpt),
+                    backbone=backbone,
+                    class_names=class_names,
+                )
+                engines[backbone] = engine
+                print(f"✓ Loaded {backbone} from {ckpt}")
+            except Exception as exc:
+                print(f"Warning: could not load {backbone}: {exc}")
+        else:
+            print(f"Info: checkpoint not found for {backbone} at {ckpt} — skipping")
+
+    if not engines:
+        # No checkpoints found — create random-weight engines for demo mode
+        print("Warning: no checkpoints found; using random-weight models for demo")
+        for backbone in backbones:
+            try:
+                engine = load_vfl_model(
+                    checkpoint_path=None,
+                    backbone=backbone,
+                    class_names=class_names,
+                )
+                engines[backbone] = engine
+            except Exception as exc:
+                print(f"Warning: could not build {backbone}: {exc}")
+
+    if not engines:
+        raise RuntimeError(
+            "Could not build any backbone engines for the ensemble. "
+            "Ensure at least one of resnet18/densenet121/efficientnet_b0 "
+            "is importable."
+        )
+
+    return MultiModelEnsembleEngine(engines=engines, weights=weights)
 
 
 # ============================================================================
