@@ -22,8 +22,8 @@ ENV/
 /dataset/
 /raw_datasets/
 
-# Model Registry
-/models/registry/
+# Model Registry – track directory structure but not checkpoint binaries
+# (registry.json and .gitkeep files ARE committed; *.pt checkpoints are NOT)
 
 # Ledger
 /ledger/
