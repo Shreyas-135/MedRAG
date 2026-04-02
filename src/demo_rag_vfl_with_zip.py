@@ -27,6 +27,7 @@ import argparse
 import time
 import os
 import traceback
+from pathlib import Path
 
 try:
     # Try to import YOLO-enhanced models first
@@ -344,7 +345,9 @@ def main():
     
     # Initialize model registry and ledger
     print("\n✓ Initializing model registry and ledger...")
-    model_registry = ModelRegistry()
+    repo_root = Path(__file__).resolve().parents[1]
+    registry_dir = repo_root / "models" / "registry"
+    model_registry = ModelRegistry(str(registry_dir))
     ledger = Ledger()
     print(f"  Registry: {model_registry.registry_dir}")
     print(f"  Ledger: {ledger.ledger_dir}")
@@ -576,14 +579,14 @@ def main():
             print(f'Val Loss: {val_loss:.2f} | Val Acc: {val_accuracy:.2f}%')
             print(f'Test Loss: {test_loss:.2f} | Test Acc: {test_accuracy:.2f}%')
             
-            # Save model checkpoint
+            # Shared metrics / config for all saved models this epoch
             metrics = {
                 'val_accuracy': float(val_accuracy),
                 'val_loss': float(val_loss),
                 'test_accuracy': float(test_accuracy),
                 'test_loss': float(test_loss)
             }
-            config = {
+            base_config = {
                 'theta': theta,
                 'num_clients': num_clients,
                 'use_rag': args.use_rag,
@@ -593,14 +596,34 @@ def main():
                 'class_names': class_names,
                 'num_classes': num_classes,
             }
-            
+
+            # Save server (backbone) model checkpoint
+            server_config = {**base_config, 'backbone': args.model_type, 'model_role': 'server'}
             version_id = model_registry.save_model(
-                server_model, 
+                server_model,
                 round_num=epoch + 1,
                 metrics=metrics,
-                config=config
+                config=server_config
             )
-            print(f'✓ Model saved: {version_id}')
+            print(f'✓ Server model saved: {version_id}')
+
+            # Save each client (hospital) model
+            for i in range(num_clients):
+                hospital_label = f'Hospital {hospital_names[i]}'
+                client_config = {
+                    **base_config,
+                    'backbone': args.model_type,
+                    'hospital': hospital_label,
+                    'model_role': 'client',
+                    'classes': class_names,
+                }
+                client_version_id = model_registry.save_model(
+                    models[i],
+                    round_num=epoch + 1,
+                    metrics={**metrics, 'hospital': hospital_label},
+                    config=client_config
+                )
+                print(f'  ✓ {hospital_label} ({args.model_type}) saved: {client_version_id}')
             
             # Log training round to ledger with hospital naming
             model_hash = model_registry.versions[version_id].model_hash
@@ -646,10 +669,16 @@ def main():
     ledger_summary = ledger.get_summary()
     
     print(f"\n📦 Model Registry Summary:")
+    print(f"  Registry directory: {model_registry.registry_dir}")
     print(f"  Total versions: {registry_summary['total_versions']}")
     print(f"  Latest version: {registry_summary.get('latest_version', 'N/A')}")
     if registry_summary.get('best_accuracy'):
         print(f"  Best accuracy: {registry_summary['best_accuracy']:.2f}%")
+    try:
+        registry_rel = model_registry.registry_dir.relative_to(repo_root)
+    except ValueError:
+        registry_rel = model_registry.registry_dir
+    print(f"  Tip: Download '{registry_rel}/' to keep versions across machines.")
     
     print(f"\n📋 Ledger Summary:")
     print(f"  Training entries: {ledger_summary['training_entries']}")

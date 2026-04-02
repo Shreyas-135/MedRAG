@@ -515,13 +515,14 @@ def generate_clinician_pdf(
 
 
 
+def format_timestamp(timestamp_str: str) -> str:
     """Format ISO timestamp for display."""
     from datetime import datetime
     try:
         dt = datetime.fromisoformat(timestamp_str)
         return dt.strftime("%Y-%m-%d %H:%M:%S")
     except (ValueError, TypeError):
-        return timestamp_str
+        return str(timestamp_str)
 
 
 def format_hash(hash_str, length=16):

@@ -432,6 +432,12 @@ cd src
 python demo_rag_vfl.py --datapath ../demo_data --use-rag --num-epochs 1
 ```
 
+> **Kaggle → Windows portability**: After training on Kaggle, download the
+> `models/registry/` directory and place it in the same location on your Windows
+> machine before launching the webapp.  All trained client and server checkpoints
+> live under this folder, so copying it is all that is needed to keep model
+> versions visible across restarts and across machines.
+
 ### Issue: Web UI won't start
 **Solution**: Install webapp dependencies
 ```bash
