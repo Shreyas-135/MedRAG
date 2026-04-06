@@ -484,6 +484,13 @@ class LangChainRAGPipeline:
         self.blockchain_integrator = blockchain_integrator
         self.use_hybrid = use_hybrid and HYBRID_RETRIEVER_AVAILABLE
 
+        if use_hybrid and not HYBRID_RETRIEVER_AVAILABLE:
+            print(
+                "Warning: use_hybrid=True requested but rank-bm25 is not installed. "
+                "Falling back to dense-only retrieval. "
+                "Install with: pip install rank-bm25"
+            )
+
         # Hybrid retriever — shared across query() calls so the BM25 index is
         # rebuilt only when the KB changes (lazy, via get_hash() comparison).
         self._hybrid_retriever: Optional["HybridRetriever"] = None

@@ -81,11 +81,15 @@ class TemperatureScaler(nn.Module):
         model: Any ``nn.Module`` that returns raw logits (pre-softmax).
     """
 
-    def __init__(self, model: nn.Module) -> None:
+    def __init__(self, model: nn.Module, initial_temperature: float = 1.5) -> None:
         super().__init__()
         self.model = model
-        # Initialise slightly above 1 — typical networks are over-confident
-        self.temperature = nn.Parameter(torch.ones(1) * 1.5)
+        # Initialise above 1.0 since most networks are over-confident out-of-the-box
+        # (Guo et al., 2017 find T > 1 for most ImageNet classifiers).  The value
+        # 1.5 is a reasonable starting point; pass ``initial_temperature`` to
+        # override if your model is known to be under-confident (T < 1) or you
+        # prefer starting at 1.0 (no-op initial state).
+        self.temperature = nn.Parameter(torch.ones(1) * initial_temperature)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Return temperature-scaled logits for input *x*."""

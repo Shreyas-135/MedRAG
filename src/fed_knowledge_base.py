@@ -237,7 +237,9 @@ class FedKBManager:
             contribution: A ``KBContribution`` produced by ``make_contribution()``
                           on the hospital side.
         """
-        key = contribution.condition
+        # Use a composite (condition, severity) key so contributions are
+        # kept separate during submission, avoiding ambiguity in aggregation.
+        key = (contribution.condition, contribution.severity)
         round_bucket = self._pending.setdefault(contribution.round_id, {})
         round_bucket.setdefault(key, []).append(contribution)
 
@@ -265,84 +267,78 @@ class FedKBManager:
         added_entries: List[Dict[str, Any]] = []
         audit_records: List[Dict[str, Any]] = []
 
-        for condition, contributions in round_bucket.items():
-            # Group by severity
-            by_severity: Dict[str, List[KBContribution]] = {}
-            for c in contributions:
-                by_severity.setdefault(c.severity, []).append(c)
+        for (condition, severity), group in round_bucket.items():
+            if len(group) < self.min_hospitals:
+                # Not enough contributors — skip to prevent memorisation
+                continue
 
-            for severity, group in by_severity.items():
-                if len(group) < self.min_hospitals:
-                    # Not enough contributors — skip to prevent memorisation
-                    continue
+            # FedAvg: mean of DP-noised embeddings, then re-normalise
+            stacked = np.stack([g.noised_embedding for g in group], axis=0)
+            avg_embedding = stacked.mean(axis=0)
+            norm = np.linalg.norm(avg_embedding)
+            if norm > 0:
+                avg_embedding = avg_embedding / norm
 
-                # FedAvg: mean of DP-noised embeddings, then re-normalise
-                stacked = np.stack([g.noised_embedding for g in group], axis=0)
-                avg_embedding = stacked.mean(axis=0)
-                norm = np.linalg.norm(avg_embedding)
-                if norm > 0:
-                    avg_embedding = avg_embedding / norm
+            # Use the most common snippet as the canonical text label
+            snippets = [g.finding_snippet for g in group]
+            text = max(set(snippets), key=snippets.count)
 
-                # Use the most common snippet as the canonical text label
-                snippets = [g.finding_snippet for g in group]
-                text = max(set(snippets), key=snippets.count)
+            metadata = {
+                "condition": condition,
+                "severity": severity,
+                "federated": True,
+                "round_id": round_id,
+                "num_hospitals": len(group),
+                "text_hashes": [g.text_hash for g in group],
+            }
+            entry_id = (
+                f"fed_r{round_id}_{condition}_{severity}_{uuid.uuid4().hex[:8]}"
+            )
 
-                metadata = {
-                    "condition": condition,
-                    "severity": severity,
-                    "federated": True,
+            self.knowledge_base.add_entry(
+                text=text,
+                embedding=avg_embedding,
+                metadata=metadata,
+                entry_id=entry_id,
+            )
+
+            entry = {
+                "entry_id": entry_id,
+                "condition": condition,
+                "severity": severity,
+                "num_hospitals": len(group),
+                "round_id": round_id,
+            }
+            added_entries.append(entry)
+
+            # Build audit record (hashes only — no raw data)
+            contribution_hashes = [
+                hashlib.sha256(
+                    json.dumps(
+                        {
+                            "id": g.contribution_id,
+                            "text_hash": g.text_hash,
+                            "hospital": g.hospital_id,
+                        },
+                        sort_keys=True,
+                    ).encode()
+                ).hexdigest()
+                for g in group
+            ]
+            audit_records.append(
+                {
                     "round_id": round_id,
-                    "num_hospitals": len(group),
-                    "text_hashes": [g.text_hash for g in group],
-                }
-                entry_id = (
-                    f"fed_r{round_id}_{condition}_{severity}_{uuid.uuid4().hex[:8]}"
-                )
-
-                self.knowledge_base.add_entry(
-                    text=text,
-                    embedding=avg_embedding,
-                    metadata=metadata,
-                    entry_id=entry_id,
-                )
-
-                entry = {
                     "entry_id": entry_id,
                     "condition": condition,
                     "severity": severity,
                     "num_hospitals": len(group),
-                    "round_id": round_id,
+                    "contribution_hashes": contribution_hashes,
+                    "avg_embedding_hash": hashlib.sha256(
+                        avg_embedding.tobytes()
+                    ).hexdigest(),
+                    "timestamp": time.time(),
                 }
-                added_entries.append(entry)
-
-                # Build audit record (hashes only — no raw data)
-                contribution_hashes = [
-                    hashlib.sha256(
-                        json.dumps(
-                            {
-                                "id": g.contribution_id,
-                                "text_hash": g.text_hash,
-                                "hospital": g.hospital_id,
-                            },
-                            sort_keys=True,
-                        ).encode()
-                    ).hexdigest()
-                    for g in group
-                ]
-                audit_records.append(
-                    {
-                        "round_id": round_id,
-                        "entry_id": entry_id,
-                        "condition": condition,
-                        "severity": severity,
-                        "num_hospitals": len(group),
-                        "contribution_hashes": contribution_hashes,
-                        "avg_embedding_hash": hashlib.sha256(
-                            avg_embedding.tobytes()
-                        ).hexdigest(),
-                        "timestamp": time.time(),
-                    }
-                )
+            )
 
         self._write_audit_log(audit_records)
         return added_entries
@@ -377,23 +373,28 @@ class FedKBManager:
                         pass
         return records
 
-    def get_round_commitment(self, round_id: int) -> str:
+    def get_round_commitment(self, round_id: int) -> Optional[str]:
         """
         Compute a SHA-256 commitment hash over all entries added in *round_id*.
 
         This hash can be submitted to ``FederatedKBRegistry.sol`` as on-chain
-        evidence of the federated KB update for that round.
+        evidence of the federated KB update for that round.  Returns ``None``
+        when no entries were added in the round — the ``None`` sentinel is
+        intentionally coordinated with the Solidity contract's
+        ``commitmentHash != bytes32(0)`` guard, which rejects zero hashes.
+        Callers must check for ``None`` before attempting an on-chain
+        submission to avoid reverting the transaction.
 
         Args:
             round_id: Round to compute the commitment for.
 
         Returns:
-            Hex SHA-256 string.
+            Hex SHA-256 string, or ``None`` if the round had no contributions.
         """
         log = self.get_audit_log()
         round_records = [r for r in log if r.get("round_id") == round_id]
         if not round_records:
-            return hashlib.sha256(b"empty").hexdigest()
+            return None
         canonical = json.dumps(
             sorted(round_records, key=lambda r: r.get("entry_id", "")),
             sort_keys=True,
