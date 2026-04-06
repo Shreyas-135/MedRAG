@@ -61,6 +61,42 @@ rag:
     # Include confidence scores
     include_confidence: true
 
+  # Hybrid Sparse-Dense Retrieval (Feature: HybridRAG)
+  # When enabled, BM25 sparse retrieval is fused with ChromaDB dense retrieval
+  # using Reciprocal Rank Fusion (RRF).  Requires: pip install rank-bm25
+  hybrid_retrieval:
+    # Set to true to activate BM25+dense+RRF pipeline
+    enabled: false
+
+    # RRF smoothing constant (Cormack et al., 2009 recommend 60)
+    rrf_k: 60
+
+    # Candidates fetched from each retriever before fusion
+    # (should be larger than retrieval_top_k for best recall)
+    dense_candidate_k: 50
+
+# Federated Knowledge Base (Feature: FedRAG-KB)
+# Allows hospital clients to contribute DP-noised class-centroid embeddings
+# to the shared ChromaDB knowledge base after each Flower round.
+# Commitment hashes are recorded in fed_kb_audit.jsonl for optional
+# on-chain anchoring via FederatedKBRegistry.sol.
+federated_kb:
+  # Set to true to enable cross-hospital KB contributions
+  enabled: false
+
+  # Minimum hospitals that must contribute the same (condition, severity)
+  # pair before it is admitted to the KB (prevents single-hospital leakage)
+  min_hospitals: 2
+
+  # Gaussian noise multiplier for local DP (larger = more private)
+  dp_sigma: 0.1
+
+  # L2 sensitivity of the per-class centroid (typically 1 / n_correct_samples)
+  sensitivity: 1.0
+
+  # Path for the append-only JSONL audit log
+  audit_log_path: "./fed_kb_audit.jsonl"
+
 # Federated Learning Configuration
 federated_learning:
   # Use Flower framework (vs custom VFL)

@@ -42,6 +42,12 @@ except ImportError:
 from config.rag_config import RAGConfig
 
 try:
+    from hybrid_retriever import HybridRetriever
+    HYBRID_RETRIEVER_AVAILABLE = True
+except ImportError:
+    HYBRID_RETRIEVER_AVAILABLE = False
+
+try:
     from provenance import (
         hash_retrieval_params,
         hash_prompt,
@@ -239,6 +245,26 @@ class ChromaDBMedicalKnowledgeBase:
             'persist_directory': self.persist_directory
         }
     
+    def get_all_texts(self) -> List[Dict[str, Any]]:
+        """
+        Return all stored documents as a list of dicts for BM25 indexing.
+
+        Each dict has keys: ``id``, ``text``, ``metadata``.
+        Required by ``HybridRetriever`` to build its sparse BM25 index
+        alongside the dense ChromaDB index.
+
+        Returns:
+            List of ``{id, text, metadata}`` dicts, one per KB entry.
+        """
+        all_data = self.collection.get(include=["documents", "metadatas"])
+        results = []
+        ids = all_data.get("ids") or []
+        documents = all_data.get("documents") or []
+        metadatas = all_data.get("metadatas") or []
+        for doc_id, text, meta in zip(ids, documents, metadatas):
+            results.append({"id": doc_id, "text": text, "metadata": meta or {}})
+        return results
+
     def get_hash(self) -> str:
         """Generate hash of knowledge base for blockchain verification."""
         # Get all entries
@@ -440,7 +466,8 @@ class LangChainRAGPipeline:
     def __init__(self,
                  knowledge_base: ChromaDBMedicalKnowledgeBase = None,
                  explainer: GeminiMedicalExplainer = None,
-                 blockchain_integrator = None):
+                 blockchain_integrator = None,
+                 use_hybrid: bool = False):
         """
         Initialize LangChain RAG pipeline.
         
@@ -448,10 +475,28 @@ class LangChainRAGPipeline:
             knowledge_base: ChromaDB knowledge base
             explainer: Gemini explainer
             blockchain_integrator: Optional blockchain integrator
+            use_hybrid: When True, use hybrid BM25+dense retrieval with
+                        Reciprocal Rank Fusion instead of dense-only.
+                        Requires ``rank-bm25`` to be installed.
         """
         self.knowledge_base = knowledge_base or ChromaDBMedicalKnowledgeBase()
         self.explainer = explainer
         self.blockchain_integrator = blockchain_integrator
+        self.use_hybrid = use_hybrid and HYBRID_RETRIEVER_AVAILABLE
+
+        if use_hybrid and not HYBRID_RETRIEVER_AVAILABLE:
+            print(
+                "Warning: use_hybrid=True requested but rank-bm25 is not installed. "
+                "Falling back to dense-only retrieval. "
+                "Install with: pip install rank-bm25"
+            )
+
+        # Hybrid retriever — shared across query() calls so the BM25 index is
+        # rebuilt only when the KB changes (lazy, via get_hash() comparison).
+        self._hybrid_retriever: Optional["HybridRetriever"] = None
+        if self.use_hybrid:
+            self._hybrid_retriever = HybridRetriever(self.knowledge_base)
+            print("  Hybrid BM25+dense retrieval enabled")
         
         # Try to initialize explainer if not provided and Gemini is available
         if self.explainer is None and GEMINI_AVAILABLE:
@@ -490,11 +535,20 @@ class LangChainRAGPipeline:
         """
         top_k = top_k or RAGConfig.RAG_RETRIEVAL_TOP_K
         
-        # Step 1: Retrieve similar cases from ChromaDB
-        retrieved_cases = self.knowledge_base.search(
-            query_embedding=embedding,
-            top_k=top_k
-        )
+        # Step 1: Retrieve similar cases from ChromaDB (dense or hybrid)
+        reranker_params: Optional[Dict[str, Any]] = None
+        if self.use_hybrid and self._hybrid_retriever is not None:
+            retrieved_cases = self._hybrid_retriever.retrieve(
+                query_embedding=embedding,
+                query_text=prediction,
+                top_k=top_k,
+            )
+            reranker_params = self._hybrid_retriever.get_reranker_params()
+        else:
+            retrieved_cases = self.knowledge_base.search(
+                query_embedding=embedding,
+                top_k=top_k
+            )
         
         # Step 2: Generate explanation with Gemini (if available and requested)
         if generate_explanation and self.explainer is not None:
@@ -538,6 +592,7 @@ class LangChainRAGPipeline:
                 item_ids=item_ids,
                 similarity_scores=similarity_scores,
                 top_k=top_k,
+                reranker_params=reranker_params,
             )
 
             # Prompt hash: hash the inputs that make up the prompt (prediction +

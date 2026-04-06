@@ -44,6 +44,9 @@ langchain-google-genai>=0.0.5
 chromadb>=0.4.22
 google-generativeai>=0.3.0
 
+# Hybrid Retrieval (BM25 sparse retrieval for HybridRetriever)
+rank-bm25>=0.2.2
+
 # Federated Learning
 flwr>=1.6.0
 flwr-datasets>=0.0.2
