@@ -3,6 +3,7 @@ Model Comparison and Evaluation Script
 Compares ResNet, VGG, ViT, and Hybrid models for federated learning
 """
 
+import os
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
@@ -146,6 +147,96 @@ def plot_comparison(df, output_path='model_comparison.png'):
     plt.tight_layout()
     plt.savefig(output_path, dpi=300, bbox_inches='tight')
     print(f"\n✓ Comparison plot saved to {output_path}")
+
+
+def calibration_benchmark(
+    model: nn.Module,
+    val_loader: DataLoader,
+    test_loader: DataLoader,
+    hospital_id: str = "unknown",
+    device: str = "cpu",
+    output_dir: str = "outputs",
+) -> dict:
+    """
+    Calibrate *model* on *val_loader*, evaluate calibration on *test_loader*,
+    and produce a reliability diagram.
+
+    This is a convenience wrapper around ``TemperatureScaler``,
+    ``compute_calibration_metrics``, and ``plot_reliability_diagram`` from
+    ``src/calibration.py``.
+
+    Args:
+        model: PyTorch model returning raw logits.
+        val_loader: Held-out calibration (validation) DataLoader.
+        test_loader: Test DataLoader for reporting final metrics.
+        hospital_id: Hospital / client identifier for labelling outputs.
+        device: 'cpu' or 'cuda'.
+        output_dir: Directory for the reliability diagram PNG.
+
+    Returns:
+        Dict with keys: ``temperature``, ``pre_calibration``,
+        ``post_calibration``, ``hospital_id``.
+        Returns an empty dict if the calibration module is unavailable.
+    """
+    try:
+        from calibration import (
+            TemperatureScaler,
+            compute_calibration_metrics,
+            plot_reliability_diagram,
+        )
+    except ImportError:
+        print("Warning: calibration module not available — skipping calibration benchmark.")
+        return {}
+
+    import numpy as np
+
+    print(f"\n{'='*60}")
+    print(f"Calibration Benchmark — {hospital_id}")
+    print(f"{'='*60}")
+
+    # ---- Fit temperature on validation set ---------------------------------
+    scaler = TemperatureScaler(model)
+    optimal_T = scaler.fit(val_loader, device=device)
+    print(f"  Optimal temperature T = {optimal_T:.4f}")
+
+    # ---- Collect test logits / labels for metric evaluation ----------------
+    model.eval()
+    model.to(device)
+    all_logits_pre, all_logits_post, all_labels = [], [], []
+    with torch.no_grad():
+        for inputs, labels in test_loader:
+            inputs = inputs.to(device)
+            logits = model(inputs)
+            all_logits_pre.append(logits.cpu().numpy())
+            all_logits_post.append((logits / scaler.temperature).cpu().numpy())
+            all_labels.append(labels.numpy())
+
+    logits_pre = np.concatenate(all_logits_pre, axis=0)
+    logits_post = np.concatenate(all_logits_post, axis=0)
+    labels_arr = np.concatenate(all_labels, axis=0)
+
+    pre = compute_calibration_metrics(logits_pre, labels_arr)
+    post = compute_calibration_metrics(logits_post, labels_arr)
+
+    print(f"  Pre-calibration  ECE = {pre['ece']:.4f}  MCE = {pre['mce']:.4f}")
+    print(f"  Post-calibration ECE = {post['ece']:.4f}  MCE = {post['mce']:.4f}")
+
+    # ---- Reliability diagram -----------------------------------------------
+    os.makedirs(output_dir, exist_ok=True)
+    save_path = os.path.join(output_dir, f"{hospital_id}_reliability.png")
+    plot_reliability_diagram(
+        logits_post,
+        labels_arr,
+        title=f"Reliability Diagram — {hospital_id} (T={optimal_T:.3f})",
+        save_path=save_path,
+    )
+
+    return {
+        "hospital_id": hospital_id,
+        "temperature": optimal_T,
+        "pre_calibration": pre,
+        "post_calibration": post,
+    }
 
 
 if __name__ == "__main__": 

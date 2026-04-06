@@ -262,6 +262,7 @@ class FlowerVFLStrategy(FedAvg):
                  server_model = None,
                  blockchain_integrator = None,
                  rag_pipeline = None,
+                 fed_kb_manager = None,
                  **kwargs):
         """
         Initialize VFL strategy.
@@ -270,6 +271,11 @@ class FlowerVFLStrategy(FedAvg):
             server_model: RAG-enhanced server model
             blockchain_integrator: Blockchain integrator for logging
             rag_pipeline: LangChain RAG pipeline
+            fed_kb_manager: Optional FedKBManager instance.  When provided,
+                            ``aggregate_round()`` is called after each
+                            successful aggregation so that hospital
+                            contributions accumulated during the round are
+                            admitted to the shared knowledge base.
             **kwargs: Additional FedAvg arguments
         """
         super().__init__(**kwargs)
@@ -277,12 +283,16 @@ class FlowerVFLStrategy(FedAvg):
         self.server_model = server_model
         self.blockchain_integrator = blockchain_integrator
         self.rag_pipeline = rag_pipeline
+        self.fed_kb_manager = fed_kb_manager
         self.round_num = 0
         
         print("✓ Flower VFL Strategy initialized")
         if blockchain_integrator:
             print("  Blockchain logging enabled")
         if rag_pipeline:
+            print("  RAG pipeline enabled")
+        if fed_kb_manager:
+            print("  Federated KB manager enabled")
             print("  RAG enhancement enabled")
     
     def aggregate_fit(
@@ -318,6 +328,17 @@ class FlowerVFLStrategy(FedAvg):
             aggregated_metrics['round'] = server_round
             aggregated_metrics['num_clients'] = len(results)
             aggregated_metrics['blockchain_logged'] = self.blockchain_integrator is not None
+
+        # Finalise federated KB contributions for this round when enabled
+        if self.fed_kb_manager is not None:
+            new_entries = self.fed_kb_manager.aggregate_round(round_id=server_round)
+            if new_entries:
+                print(
+                    f"  [FedKB] Round {server_round}: added {len(new_entries)} "
+                    f"federated entries to the shared knowledge base"
+                )
+                if aggregated_metrics:
+                    aggregated_metrics['fed_kb_entries_added'] = len(new_entries)
         
         return aggregated_parameters, aggregated_metrics
     
