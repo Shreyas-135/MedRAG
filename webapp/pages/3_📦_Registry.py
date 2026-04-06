@@ -2,6 +2,7 @@
 Model Registry Page - Browse and Compare Models
 """
 
+import json
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
@@ -289,6 +290,68 @@ if selected_version_id:
             st.info("📝 Note: Hospital-specific metrics available after training")
         
         st.markdown("---")
+
+        # ============================================================
+        # NEW SECTION: Saved artifact plots from models/registry/
+        # ============================================================
+        st.markdown("### 🖼️ Saved Evaluation Artifacts")
+        artifacts = registry.get_version_artifacts(selected_version_id)
+
+        # Load richer metrics from metrics.json when available
+        if artifacts.get("metrics"):
+            try:
+                with open(artifacts["metrics"], encoding="utf-8") as _mf:
+                    rich_metrics = json.load(_mf)
+                _metric_cols = st.columns(4)
+                _display_keys = [
+                    ("accuracy", "Accuracy", "{:.2%}"),
+                    ("f1_macro", "Macro F1", "{:.4f}"),
+                    ("roc_auc_macro", "Macro AUC-ROC", "{:.4f}"),
+                    ("precision_macro", "Precision (M)", "{:.4f}"),
+                    ("recall_macro", "Recall (M)", "{:.4f}"),
+                    ("f1_weighted", "Weighted F1", "{:.4f}"),
+                ]
+                for _idx, (_key, _label, _fmt) in enumerate(_display_keys):
+                    if _key in rich_metrics:
+                        _val = rich_metrics[_key]
+                        if isinstance(_val, (int, float)):
+                            _metric_cols[_idx % 4].metric(_label, _fmt.format(_val))
+            except Exception:
+                pass
+
+        # Manifest details
+        if artifacts.get("manifest"):
+            with st.expander("📄 Manifest / Provenance"):
+                try:
+                    with open(artifacts["manifest"], encoding="utf-8") as _mf:
+                        manifest_data = json.load(_mf)
+                    st.json(manifest_data)
+                except Exception as _me:
+                    st.warning(f"Could not load manifest: {_me}")
+
+        # Plot images – display in 3 columns
+        _plot_map = {
+            "confusion_matrix": ("Confusion Matrix", "🔲"),
+            "roc_curves": ("ROC Curves", "📈"),
+            "training_curves": ("Training Curves", "📉"),
+        }
+        _available_plots = {k: p for k, p in artifacts.items() if k in _plot_map and p is not None}
+
+        if _available_plots:
+            _plot_cols = st.columns(len(_available_plots))
+            for _ci, (_pkey, _ppath) in enumerate(_available_plots.items()):
+                _title, _icon = _plot_map[_pkey]
+                with _plot_cols[_ci]:
+                    st.markdown(f"**{_icon} {_title}**")
+                    st.image(str(_ppath), use_container_width=True)
+        else:
+            st.info(
+                "📊 No saved plots found for this version. "
+                "Plots are automatically saved during training and stored under "
+                f"`models/registry/versions/{selected_version_id}/`."
+            )
+
+        st.markdown("---")
         
         # Download section
         st.markdown("### 💾 Export Model")
@@ -321,7 +384,6 @@ if selected_version_id:
         
         with col2:
             # Export model metadata
-            import json
             metadata = {
                 'version_id': selected_version.version_id,
                 'round': selected_version.round_num,
@@ -446,7 +508,6 @@ col1, col2, col3 = st.columns(3)
 
 with col1:
     if st.button("📥 Export All as JSON", use_container_width=True):
-        import json
         registry_data = {vid: v.to_dict() for vid, v in registry.versions.items()}
         json_str = json.dumps(registry_data, indent=2)
         

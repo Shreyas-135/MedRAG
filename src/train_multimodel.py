@@ -263,6 +263,7 @@ def register_checkpoint(
     cfg: Dict,
     round_num: int = 1,
     checkpoint_hash: Optional[str] = None,
+    plots_dir: Optional[str] = None,
 ) -> Tuple[Optional[str], Optional[str]]:
     """
     Register a saved checkpoint in :class:`~model_registry.ModelRegistry`.
@@ -271,10 +272,17 @@ def register_checkpoint(
     root).  A stable versioned entry is created using backbone name +
     timestamp so previous entries are never overwritten.
 
+    Per-version artifacts (``metrics.json``, ``manifest.json``, and plot PNGs)
+    are saved under ``models/registry/versions/<version_id>/`` so they can be
+    read by the Streamlit app without retraining.
+
     Args:
         round_num: Training round number (default 1 for single-run pipelines).
         checkpoint_hash: Pre-computed SHA-256 hex digest of the checkpoint file.
             If ``None`` the hash is computed here by reading the file.
+        plots_dir: Directory that already contains ``{model_name}_confusion_matrix.png``,
+            ``{model_name}_roc_curves.png``, and ``{model_name}_training_curves.png``.
+            When supplied, those plots are copied into the per-version directory.
 
     Returns ``(version_id, sha256_hex)`` on success, or ``(None, None)`` on failure.
     """
@@ -300,38 +308,88 @@ def register_checkpoint(
             f"{model_name}_r{round_num}_{timestamp.strftime('%Y%m%d_%H%M%S')}"
         )
 
+        version_metrics = {
+            # test_accuracy kept as percent (0-100) for webapp display
+            "test_accuracy":  round(metrics.get("accuracy", 0.0) * 100, 2),
+            # Standard float (0-1) keys as required by problem spec
+            "accuracy":       round(metrics.get("accuracy", 0.0), 4),
+            "f1":             round(metrics.get("f1_macro", 0.0), 4),
+            "roc_auc":        round(metrics.get("roc_auc_macro", 0.0), 4),
+            "f1_macro":       metrics.get("f1_macro", 0.0),
+            "f1_weighted":    metrics.get("f1_weighted", 0.0),
+            "roc_auc_macro":  metrics.get("roc_auc_macro", 0.0),
+            "precision_macro": metrics.get("precision_macro", 0.0),
+            "recall_macro":    metrics.get("recall_macro", 0.0),
+            "best_val_f1":    best_val_f1,
+        }
+        version_config = {
+            "backbone_name": model_name,
+            "backbone":      model_name,
+            "hospital":      HOSPITAL_MAP.get(model_name, model_name),
+            "class_names":   class_names,
+            "checkpoint_path": ckpt_path,
+            "use_rag":        False,
+            "use_blockchain": cfg.get("blockchain", {}).get("enabled", False),
+        }
+
         version = ModelVersion(
             version_id=version_id,
             round_num=round_num,
-            metrics={
-                # test_accuracy kept as percent (0-100) for webapp display
-                "test_accuracy":  round(metrics.get("accuracy", 0.0) * 100, 2),
-                # Standard float (0-1) keys as required by problem spec
-                "accuracy":       round(metrics.get("accuracy", 0.0), 4),
-                "f1":             round(metrics.get("f1_macro", 0.0), 4),
-                "roc_auc":        round(metrics.get("roc_auc_macro", 0.0), 4),
-                "f1_macro":       metrics.get("f1_macro", 0.0),
-                "f1_weighted":    metrics.get("f1_weighted", 0.0),
-                "roc_auc_macro":  metrics.get("roc_auc_macro", 0.0),
-                "precision_macro": metrics.get("precision_macro", 0.0),
-                "recall_macro":    metrics.get("recall_macro", 0.0),
-                "best_val_f1":    best_val_f1,
-            },
-            config={
-                "backbone_name": model_name,
-                "backbone":      model_name,
-                "hospital":      HOSPITAL_MAP.get(model_name, model_name),
-                "class_names":   class_names,
-                "checkpoint_path": ckpt_path,
-                "use_rag":        False,
-                "use_blockchain": cfg.get("blockchain", {}).get("enabled", False),
-            },
+            metrics=version_metrics,
+            config=version_config,
             model_hash=file_hash,
             timestamp=timestamp.isoformat(),
             checkpoint_path=ckpt_path,
         )
         version_id = registry.register_entry(version)
         print(f"  ModelRegistry: registered '{version_id}'")
+
+        # ── Per-version artifacts ──────────────────────────────────────────
+        # Resolve the per-model plot paths from plots_dir (if provided)
+        plot_map: Dict[str, str] = {}
+        if plots_dir:
+            for key, suffix in [
+                ("confusion_matrix", f"{model_name}_confusion_matrix.png"),
+                ("roc_curves",       f"{model_name}_roc_curves.png"),
+                ("training_curves",  f"{model_name}_training_curves.png"),
+            ]:
+                src = os.path.join(plots_dir, suffix)
+                if os.path.isfile(src):
+                    plot_map[key] = src
+
+        # Attempt to retrieve git commit hash for manifest provenance
+        try:
+            import subprocess
+            git_commit = subprocess.check_output(
+                ["git", "rev-parse", "--short", "HEAD"],
+                cwd=repo_root,
+                stderr=subprocess.DEVNULL,
+            ).decode().strip()
+        except Exception:
+            git_commit = "unknown"
+
+        manifest = {
+            "version_id":      version_id,
+            "backbone":        model_name,
+            "model_type":      model_name,
+            "hospital":        HOSPITAL_MAP.get(model_name, model_name),
+            "class_names":     class_names,
+            "round_num":       round_num,
+            "timestamp":       timestamp.isoformat(),
+            "checkpoint_path": ckpt_path,
+            "sha256":          file_hash,
+            "git_commit":      git_commit,
+            "use_rag":         False,
+            "use_blockchain":  cfg.get("blockchain", {}).get("enabled", False),
+        }
+
+        version_dir = registry.save_version_artifacts(
+            version_id=version_id,
+            metrics=version_metrics,
+            manifest=manifest,
+            plots=plot_map,
+        )
+        print(f"  Per-version artifacts saved: {version_dir}")
 
         # ── Mirror to outputs/model_registry.json ──────────────────────────
         # This provides a flat, human-readable JSON at the well-known path
@@ -886,6 +944,7 @@ def train_model(
     )
 
     # Save best checkpoint to disk
+    version_id = None
     if best_state is not None:
         ckpt_path = os.path.join(checkpoint_dir, f"{model_name}_best.pth")
         ckpt_payload = {
@@ -946,7 +1005,7 @@ def train_model(
             except Exception as _bc_exc:
                 print(f"  Warning: Blockchain checkpoint log failed: {_bc_exc}")
 
-    return model, history, final_metrics
+    return model, history, final_metrics, version_id
 
 
 # ─────────────────────────── Main pipeline ────────────────────────────────────
@@ -1031,7 +1090,7 @@ def run_pipeline(cfg: Dict, use_blockchain: bool = False):
     for model_name in enabled_models:
         print(f"\n  [Hospital assignment] {model_name} → {HOSPITAL_MAP.get(model_name, model_name)}")
         try:
-            model, history, metrics = train_model(
+            model, history, metrics, version_id = train_model(
                 model_name=model_name,
                 cfg=cfg,
                 train_loader=train_loader,
@@ -1060,6 +1119,46 @@ def run_pipeline(cfg: Dict, use_blockchain: bool = False):
                 metrics["confusion_matrix"], class_names, model_name, plots_dir
             )
             plot_roc_curves(metrics, class_names, model_name, plots_dir)
+
+            # Copy generated plots into the per-version registry directory
+            if version_id is not None:
+                try:
+                    from model_registry import ModelRegistry
+
+                    repo_root = os.path.abspath(
+                        os.path.join(os.path.dirname(__file__), "..")
+                    )
+                    _reg = ModelRegistry(
+                        registry_dir=os.path.join(repo_root, "models", "registry")
+                    )
+                    _reg.save_version_artifacts(
+                        version_id=version_id,
+                        metrics={
+                            k: v
+                            for k, v in metrics.items()
+                            if k not in ("all_labels", "all_preds", "all_probs",
+                                         "confusion_matrix", "fpr_dict", "tpr_dict")
+                        },
+                        manifest={
+                            "backbone": model_name,
+                            "hospital": HOSPITAL_MAP.get(model_name, model_name),
+                            "class_names": class_names,
+                            "round_num": 1,
+                        },
+                        plots={
+                            "confusion_matrix": os.path.join(
+                                plots_dir, f"{model_name}_confusion_matrix.png"
+                            ),
+                            "roc_curves": os.path.join(
+                                plots_dir, f"{model_name}_roc_curves.png"
+                            ),
+                            "training_curves": os.path.join(
+                                plots_dir, f"{model_name}_training_curves.png"
+                            ),
+                        },
+                    )
+                except Exception as _artifact_exc:
+                    print(f"  Warning: Could not save version artifacts: {_artifact_exc}")
 
             summary_records.append(
                 {

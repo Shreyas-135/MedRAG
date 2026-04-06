@@ -72,6 +72,9 @@ dataset_info.json
 
 # Model checkpoints (keep registry.json but ignore large .pt files)
 models/registry/checkpoints/*.pt
+# Per-version checkpoint files inside versions/ are also large – ignore them
+models/registry/versions/**/artifacts/*.pth
+models/registry/versions/**/artifacts/*.pt
 
 # Outputs (keep .gitkeep to track dir; ignore generated artifacts and checkpoints)
 outputs/checkpoints/
