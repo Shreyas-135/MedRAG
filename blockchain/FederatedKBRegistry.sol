@@ -153,6 +153,10 @@ contract FederatedKBRegistry {
             numContributors >= minContributors,
             "FederatedKBRegistry: not enough contributors"
         );
+        // Reject the zero hash (bytes32(0)) to prevent accidental empty submissions.
+        // This is coordinated with the Python-side FedKBManager.get_round_commitment(),
+        // which returns None (not a hash) when a round has no contributions — callers
+        // must check for None before calling this function.
         require(commitmentHash != bytes32(0), "FederatedKBRegistry: empty hash");
 
         commitments[roundId] = RoundCommitment({

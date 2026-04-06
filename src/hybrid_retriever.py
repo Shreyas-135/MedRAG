@@ -55,8 +55,12 @@ except ImportError:
 # ---------------------------------------------------------------------------
 
 def _tokenize(text: str) -> List[str]:
-    """Lower-case, strip punctuation, split on whitespace."""
-    return re.sub(r"[^\w\s]", " ", text.lower()).split()
+    """Lower-case, strip non-alphanumeric (except hyphens), split on whitespace.
+
+    Hyphens are preserved so clinical terms like 'COVID-19', 'ground-glass',
+    and 'X-ray' are not split into unrelated tokens.
+    """
+    return re.sub(r"[^a-zA-Z0-9\s\-]", " ", text.lower()).split()
 
 
 # ---------------------------------------------------------------------------

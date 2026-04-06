@@ -79,6 +79,14 @@ class TemperatureScaler(nn.Module):
 
     Args:
         model: Any ``nn.Module`` that returns raw logits (pre-softmax).
+        initial_temperature: Starting value for the temperature parameter
+            before optimisation (default ``1.5``).  Most image classifiers
+            are over-confident (Guo et al., 2017 find T > 1 for ImageNet
+            models), so 1.5 is a practical starting point.  Override with
+            ``1.0`` for a no-op initialisation, or with a value < 1 if
+            your model is known to be under-confident — a situation that
+            can occur in federated settings where local training on small
+            hospital datasets may produce low-confidence predictions.
     """
 
     def __init__(self, model: nn.Module, initial_temperature: float = 1.5) -> None:

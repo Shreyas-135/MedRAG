@@ -233,12 +233,18 @@ class FedKBManager:
         """
         Accept a contribution from one hospital for a given round.
 
+        Contributions are stored in ``self._pending`` under a two-level
+        mapping:  ``round_id → (condition, severity) → [KBContribution]``.
+        Using the composite tuple ``(condition, severity)`` as the inner key
+        keeps contributions with the same condition but different severity
+        levels in separate buckets, avoiding any ambiguity during
+        ``aggregate_round()``.
+
         Args:
             contribution: A ``KBContribution`` produced by ``make_contribution()``
                           on the hospital side.
         """
-        # Use a composite (condition, severity) key so contributions are
-        # kept separate during submission, avoiding ambiguity in aggregation.
+        # Composite key: (condition, severity) — e.g. ('covid', 'moderate')
         key = (contribution.condition, contribution.severity)
         round_bucket = self._pending.setdefault(contribution.round_id, {})
         round_bucket.setdefault(key, []).append(contribution)
