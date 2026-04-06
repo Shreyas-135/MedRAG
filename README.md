@@ -192,6 +192,56 @@ version_id = registry.save_model(model, round_num=5,
 best_model = registry.get_best_model('accuracy')
 ```
 
+#### Persistent Registry Directory Layout
+
+After training, each model version is stored under `models/registry/versions/<version_id>/`:
+
+```
+models/registry/
+├── registry.json          # Full version metadata index
+├── index.json             # Lightweight summary (latest + all IDs)
+├── ledger.jsonl           # Append-only train/access log
+├── checkpoints/           # Model weight files (not committed to git)
+│   └── *.pt
+└── versions/
+    └── <version_id>/      # e.g. resnet18_r1_20260405_073345/
+        ├── metrics.json       # precision, recall, accuracy, f1, auc_roc
+        ├── manifest.json      # backbone, dataset, round, timestamp, git_commit
+        ├── confusion_matrix.png
+        ├── roc_curves.png
+        └── training_curves.png
+```
+
+The registry root can be overridden via the `MEDRAG_REGISTRY_DIR` environment
+variable (useful on Kaggle: `/kaggle/working/MedRAG/models/registry`).
+
+#### Registry API
+
+```python
+from model_registry import ModelRegistry
+
+registry = ModelRegistry()                      # or ModelRegistry(registry_dir=...)
+
+registry.list_versions()                        # → ["resnet18_r1_...", ...]
+registry.get_latest()                           # → ModelVersion (newest)
+registry.load_version("resnet18_r1_...")        # → ModelVersion (logs access)
+registry.get_version_artifacts("resnet18_r1_…") # → {metrics, manifest,
+                                                #    confusion_matrix, roc_curves,
+                                                #    training_curves} paths
+```
+
+Artifacts are saved automatically during training and can be viewed in the
+Streamlit **Model Registry** page (`webapp/pages/3_📦_Registry.py`) without
+retraining.
+
+#### Downloading / Restoring `models/registry/`
+
+- The `models/registry/versions/` directory is tracked in git (PNG plots and
+  JSON files are committed; large `.pt` checkpoint binaries are git-ignored).
+- To keep checkpoints across Kaggle sessions, download the entire
+  `models/registry/` folder after training completes.
+- To restore on a new machine, copy the folder back and launch the Streamlit app.
+
 ### Comprehensive Ledger
 
 Immutable audit trail for compliance and transparency:

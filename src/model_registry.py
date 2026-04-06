@@ -1,16 +1,41 @@
 """
 Model Registry and Versioning System for MedRAG
 Tracks model versions, checkpoints, metrics, and training configurations.
+
+Per-version layout under ``models/registry/versions/<version_id>/``:
+    metrics.json          – all computed metrics
+    manifest.json         – backbone, dataset, round, timestamp, git commit, kb_hash
+    confusion_matrix.png  – heatmap
+    roc_curves.png        – ROC curves (OvR)
+    training_curves.png   – loss/accuracy/F1 vs epoch
+
+Top-level registry files:
+    registry.json         – full version metadata index
+    index.json            – lightweight summary (latest version + all IDs)
+    ledger.jsonl          – append-only train/access log
+
+The registry root can be overridden via the ``MEDRAG_REGISTRY_DIR`` environment
+variable, which is useful on Kaggle (``/kaggle/working/MedRAG/models/registry``).
 """
 
 import os
 import json
 import torch
 import hashlib
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, List, Optional, Any
 from pathlib import Path
 import shutil
+
+# Canonical per-version artifact filenames (shared by get_version_artifacts
+# and save_version_artifacts to avoid duplication).
+_ARTIFACT_FILES: Dict[str, str] = {
+    "metrics": "metrics.json",
+    "manifest": "manifest.json",
+    "confusion_matrix": "confusion_matrix.png",
+    "roc_curves": "roc_curves.png",
+    "training_curves": "training_curves.png",
+}
 
 
 class ModelVersion:
@@ -82,19 +107,29 @@ class ModelRegistry:
         
         Args:
             registry_dir: Directory to store registry and checkpoints.
-                         Defaults to 'models/registry' relative to project root.
+                         Defaults to 'models/registry' relative to project root,
+                         or the value of the ``MEDRAG_REGISTRY_DIR`` environment
+                         variable when set.
         """
         if registry_dir is None:
-            # Default to models/registry in project root
-            repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-            registry_dir = os.path.join(repo_root, 'models', 'registry')
+            # Honor env-var override (useful on Kaggle or CI)
+            env_dir = os.environ.get("MEDRAG_REGISTRY_DIR")
+            if env_dir:
+                registry_dir = env_dir
+            else:
+                repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+                registry_dir = os.path.join(repo_root, 'models', 'registry')
         
         self.registry_dir = Path(registry_dir)
         self.checkpoint_dir = self.registry_dir / 'checkpoints'
+        self.versions_dir = self.registry_dir / 'versions'
         self.registry_file = self.registry_dir / 'registry.json'
+        self.index_file = self.registry_dir / 'index.json'
+        self.ledger_file = self.registry_dir / 'ledger.jsonl'
         
         # Create directories if they don't exist
         self.checkpoint_dir.mkdir(parents=True, exist_ok=True)
+        self.versions_dir.mkdir(parents=True, exist_ok=True)
 
         # Bootstrap an empty registry file so git-tracked structure is valid
         if not self.registry_file.exists():
@@ -200,10 +235,38 @@ class ModelRegistry:
             self.versions = {}
     
     def _save_registry(self):
-        """Save registry to JSON file."""
+        """Save registry to JSON file and update index.json."""
         data = {vid: v.to_dict() for vid, v in self.versions.items()}
         with open(self.registry_file, 'w') as f:
             json.dump(data, f, indent=2)
+        self._update_index()
+
+    def _update_index(self):
+        """Overwrite ``index.json`` with a lightweight summary."""
+        try:
+            latest = None
+            if self.versions:
+                latest_v = max(self.versions.values(), key=lambda v: v.timestamp)
+                latest = latest_v.version_id
+            index = {
+                "latest_version": latest,
+                "total_versions": len(self.versions),
+                "versions": list(self.versions.keys()),
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+            }
+            with open(self.index_file, 'w') as f:
+                json.dump(index, f, indent=2)
+        except Exception as exc:
+            print(f"Warning: Could not update index.json: {exc}")
+
+    def _append_ledger(self, entry: Dict):
+        """Append a single JSON line to ``ledger.jsonl``."""
+        try:
+            entry.setdefault("timestamp", datetime.now(timezone.utc).isoformat())
+            with open(self.ledger_file, 'a', encoding='utf-8') as f:
+                f.write(json.dumps(entry) + '\n')
+        except Exception as exc:
+            print(f"Warning: Could not write to ledger.jsonl: {exc}")
 
     def register_entry(self, version: 'ModelVersion') -> str:
         """
@@ -221,6 +284,12 @@ class ModelRegistry:
         """
         self.versions[version.version_id] = version
         self._save_registry()
+        self._append_ledger({
+            "event": "register",
+            "version_id": version.version_id,
+            "backbone": version.config.get("backbone_name") or version.config.get("backbone"),
+            "round_num": version.round_num,
+        })
         return version.version_id
     
     def _compute_model_hash(self, model: torch.nn.Module) -> str:
@@ -441,6 +510,98 @@ class ModelRegistry:
             'best_accuracy': best.metrics.get('accuracy') if best else None,
             'storage_size_mb': total_size / (1024 * 1024)
         }
+
+    # ------------------------------------------------------------------
+    # Public registry API
+    # ------------------------------------------------------------------
+
+    def list_versions(self) -> List[str]:
+        """Return all registered version IDs sorted newest-first."""
+        return [v.version_id for v in self.get_model_history()]
+
+    def get_latest(self) -> Optional[ModelVersion]:
+        """Return the most recently registered :class:`ModelVersion`."""
+        if not self.versions:
+            return None
+        return max(self.versions.values(), key=lambda v: v.timestamp)
+
+    def load_version(self, version_id: str) -> Optional[ModelVersion]:
+        """Return the :class:`ModelVersion` for *version_id* (alias for :meth:`get_version`)."""
+        version = self.get_version(version_id)
+        if version is not None:
+            self._append_ledger({"event": "access", "version_id": version_id})
+        return version
+
+    def get_version_artifacts(self, version_id: str) -> Dict[str, Optional[Path]]:
+        """
+        Return a dict mapping artifact names to their :class:`~pathlib.Path`
+        (or ``None`` when the file does not exist).
+
+        Keys: ``metrics``, ``manifest``, ``confusion_matrix``, ``roc_curves``,
+              ``training_curves``.
+        """
+        version_dir = self.versions_dir / version_id
+        return {
+            key: (p if (p := version_dir / fname).exists() else None)
+            for key, fname in _ARTIFACT_FILES.items()
+        }
+
+    def save_version_artifacts(
+        self,
+        version_id: str,
+        metrics: Dict[str, Any],
+        manifest: Dict[str, Any],
+        plots: Optional[Dict[str, str]] = None,
+    ) -> Path:
+        """
+        Persist metrics, manifest, and plot images under the per-version directory.
+
+        Args:
+            version_id: Registry version ID (used as sub-directory name).
+            metrics:    Dict of metric name → value.
+            manifest:   Dict of metadata fields (backbone, dataset, round, etc.).
+            plots:      Optional mapping of artifact key → source file path, e.g.::
+
+                            {
+                                "confusion_matrix": "outputs/plots/resnet18_confusion_matrix.png",
+                                "roc_curves":       "outputs/plots/resnet18_roc_curves.png",
+                                "training_curves":  "outputs/plots/resnet18_training_curves.png",
+                            }
+
+        Returns:
+            Path to the per-version directory.
+        """
+        version_dir = self.versions_dir / version_id
+        version_dir.mkdir(parents=True, exist_ok=True)
+
+        # Save metrics.json
+        with open(version_dir / _ARTIFACT_FILES["metrics"], 'w', encoding='utf-8') as f:
+            json.dump(metrics, f, indent=2)
+
+        # Save manifest.json (add registry dir + version dir for convenience)
+        manifest = dict(manifest)
+        manifest.setdefault("version_id", version_id)
+        manifest.setdefault("registry_dir", str(self.registry_dir))
+        manifest.setdefault("version_dir", str(version_dir))
+        with open(version_dir / _ARTIFACT_FILES["manifest"], 'w', encoding='utf-8') as f:
+            json.dump(manifest, f, indent=2)
+
+        # Copy plots using canonical destination filenames from _ARTIFACT_FILES
+        if plots:
+            for key, src_path in plots.items():
+                if src_path and os.path.isfile(src_path) and key in _ARTIFACT_FILES:
+                    dest = version_dir / _ARTIFACT_FILES[key]
+                    try:
+                        shutil.copy2(src_path, dest)
+                    except OSError as exc:
+                        print(f"  Warning: Could not copy plot '{src_path}': {exc}")
+
+        self._append_ledger({
+            "event": "artifacts_saved",
+            "version_id": version_id,
+            "version_dir": str(version_dir),
+        })
+        return version_dir
 
 
 if __name__ == "__main__":
