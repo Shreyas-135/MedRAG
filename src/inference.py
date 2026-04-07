@@ -3,6 +3,7 @@ Inference Module for MedRAG
 Provides single image prediction with RAG explanations.
 """
 
+import logging
 import torch
 import torch.nn as nn
 import torchvision.transforms as transforms
@@ -15,6 +16,16 @@ import time
 
 from models import ClientModel2Layers
 from rag_server_model import RAGEnhancedServerModel
+
+logger = logging.getLogger(__name__)
+
+# Optional Gemini explainer – imported lazily so the module stays importable
+# even when google-generativeai is not installed.
+try:
+    from langchain_rag import GeminiMedicalExplainer
+    _GEMINI_IMPORT_OK = True
+except (ImportError, ModuleNotFoundError):
+    _GEMINI_IMPORT_OK = False
 
 
 def detect_class_names_from_dir(dataset_dir: str):
@@ -895,6 +906,32 @@ def _generate_gradcam_pil(
         return None
 
 
+def _citations_as_retrieved_cases(
+    citations: List[Dict[str, str]],
+    condition: str,
+) -> List[Dict[str, Any]]:
+    """
+    Convert the static ``_MEDICAL_CITATIONS`` list for one class into the
+    ``retrieved_cases`` format expected by :class:`GeminiMedicalExplainer`.
+
+    This lets us pass curated literature context to Gemini without needing a
+    live ChromaDB query (which would require a 64-dim image embedding we don't
+    have in the ensemble path).
+    """
+    cases = []
+    for cit in citations:
+        cases.append({
+            "text":       cit.get("snippet", ""),
+            "similarity": 1.0,  # pre-filtered to the predicted class
+            "metadata": {
+                "condition": condition,
+                "source":    cit.get("source", ""),
+                "url":       cit.get("url", ""),
+            },
+        })
+    return cases
+
+
 class MultiModelEnsembleEngine:
     """
     Weighted-average ensemble inference over multiple VFLFramework models.
@@ -905,14 +942,21 @@ class MultiModelEnsembleEngine:
     ``train_multimodel.weighted_ensemble_predict``).
 
     Args:
-        engines : mapping of ``backbone_name`` → :class:`VFLInferenceEngine`
-        weights : per-backbone weight (defaults to :data:`_ENSEMBLE_WEIGHTS`)
+        engines              : mapping of ``backbone_name`` → :class:`VFLInferenceEngine`
+        weights              : per-backbone weight (defaults to :data:`_ENSEMBLE_WEIGHTS`)
+        gemini_explainer     : optional :class:`GeminiMedicalExplainer`; when
+                               provided, explanations are generated via Gemini
+                               instead of the static radiology templates.
+        using_random_weights : ``True`` when no trained checkpoints were found
+                               and models are running with random initialisations.
     """
 
     def __init__(
         self,
         engines: Dict[str, "VFLInferenceEngine"],
         weights: Optional[Dict[str, float]] = None,
+        gemini_explainer: Optional[Any] = None,
+        using_random_weights: bool = False,
     ):
         if not engines:
             raise ValueError("engines dict must contain at least one engine")
@@ -921,6 +965,8 @@ class MultiModelEnsembleEngine:
         # Infer class names from the first available engine
         first_engine = next(iter(engines.values()))
         self.class_names: List[str] = first_engine.class_names
+        self.gemini_explainer = gemini_explainer
+        self.using_random_weights = using_random_weights
 
     # ------------------------------------------------------------------
     def predict(
@@ -1004,13 +1050,55 @@ class MultiModelEnsembleEngine:
         else:
             review_reason = ""
 
-        # RAG explanation + citations (use first engine's template)
-        first_engine = next(iter(self.engines.values()))
+        # RAG explanation + citations
+        # ----------------------------------------------------------------
+        # Priority:
+        #   1. Gemini via GeminiMedicalExplainer (when GEMINI_API_KEY set)
+        #   2. Static radiology template (always available as fallback)
+        # ----------------------------------------------------------------
+        rag_explanation: str = ""
+        rag_source: str = "template"
+        citations = _MEDICAL_CITATIONS.get(pred_class, [])
+
+        if self.gemini_explainer is not None:
+            try:
+                # Build context from curated static citations for the
+                # predicted class so Gemini has relevant medical literature.
+                retrieved_cases = _citations_as_retrieved_cases(
+                    citations, pred_class
+                )
+                gemini_result = self.gemini_explainer.generate_explanation(
+                    prediction=pred_class,
+                    confidence=confidence_val,
+                    retrieved_cases=retrieved_cases,
+                    include_citations=True,
+                )
+                rag_explanation = gemini_result.get("explanation", "")
+                rag_source = gemini_result.get("model", "gemini")
+                if rag_source == "fallback":
+                    logger.warning(
+                        "Gemini API unavailable for explanation — using fallback. "
+                        "Set GEMINI_API_KEY to enable Gemini-generated explanations."
+                    )
+                else:
+                    logger.info("Explanation generated via Gemini (%s)", rag_source)
+            except Exception as _gemini_err:
+                logger.warning("Gemini explanation failed: %s; falling back to template.", _gemini_err)
+                rag_explanation = ""
+                rag_source = "template"
+
+        # Always fill in the template-based text (used when Gemini is
+        # unavailable AND as fallback text for older callers expecting
+        # explanation_text in the result dict).
         explanation_text = _RADIOLOGY_TEMPLATES.get(
             pred_class,
             f"Model predicted {pred_class} with confidence {confidence_val:.1%}.",
         ).format(confidence=confidence_val)
-        citations = _MEDICAL_CITATIONS.get(pred_class, [])
+
+        # Prefer Gemini explanation over template when available
+        if not rag_explanation:
+            rag_explanation = explanation_text
+            rag_source = "template"
 
         # Grad-CAM images in memory
         gradcam_images: Dict[str, Any] = {}
@@ -1021,25 +1109,31 @@ class MultiModelEnsembleEngine:
                 )
 
         return {
-            "prediction":       pred_class,
-            "confidence":       confidence_val,
-            "probabilities":    {
+            "prediction":           pred_class,
+            "confidence":           confidence_val,
+            "probabilities":        {
                 c: float(aggregated[i])
                 for i, c in enumerate(self.class_names)
             },
-            "per_hospital":     per_hospital,
-            "ensemble_weights": {
+            "per_hospital":         per_hospital,
+            "ensemble_weights":     {
                 n: self.weights.get(n, default_w)
                 for n in present
             },
-            "needs_review":     needs_review,
-            "review_reason":    review_reason,
-            "explanation_text": explanation_text,
-            "citations":        citations,
-            "gradcam_images":   gradcam_images,
-            "inference_time":   time.time() - start,
-            "model_type":       f"Weighted Ensemble VFL ({len(self.engines)} backbones)",
-            "num_models":       len(self.engines),
+            "needs_review":         needs_review,
+            "review_reason":        review_reason,
+            # explanation_text keeps backward-compat; rag_explanation is the
+            # primary field consumed by the webapp RAG section.
+            "explanation_text":     rag_explanation,
+            "rag_explanation":      rag_explanation,
+            "rag_source":           rag_source,
+            "citations":            citations,
+            "gradcam_images":       gradcam_images,
+            "inference_time":       time.time() - start,
+            "model_type":           f"Weighted Ensemble VFL ({len(self.engines)} backbones)",
+            "num_models":           len(self.engines),
+            # Diagnostic flags surfaced to the UI
+            "using_random_weights": self.using_random_weights,
         }
 
 
@@ -1047,6 +1141,7 @@ def load_multi_model_ensemble(
     checkpoints_dir: str = None,
     class_names: List[str] = None,
     weights: Optional[Dict[str, float]] = None,
+    use_langchain: bool = False,
 ) -> "MultiModelEnsembleEngine":
     """
     Load all available VFLFramework checkpoints from *checkpoints_dir* and
@@ -1060,6 +1155,12 @@ def load_multi_model_ensemble(
                           Defaults to ``<repo_root>/outputs/checkpoints/``.
         class_names     : Override class names for all engines.
         weights         : Per-backbone weights (defaults to :data:`_ENSEMBLE_WEIGHTS`).
+        use_langchain   : When ``True``, attempt to build a
+                          :class:`~langchain_rag.GeminiMedicalExplainer` so that
+                          explanations are generated by Gemini when
+                          ``GEMINI_API_KEY`` is set in the environment.
+                          Falls back gracefully if the key is missing or the
+                          package is unavailable.
 
     Returns:
         :class:`MultiModelEnsembleEngine` with at least one engine loaded.
@@ -1075,6 +1176,7 @@ def load_multi_model_ensemble(
 
     backbones = ["resnet18", "densenet121", "efficientnet_b0"]
     engines: Dict[str, VFLInferenceEngine] = {}
+    using_random_weights = False
 
     for backbone in backbones:
         ckpt = Path(checkpoints_dir) / f"{backbone}_best.pth"
@@ -1086,15 +1188,21 @@ def load_multi_model_ensemble(
                     class_names=class_names,
                 )
                 engines[backbone] = engine
-                print(f"✓ Loaded {backbone} from {ckpt}")
+                logger.info("Loaded %s from %s", backbone, ckpt)
             except Exception as exc:
-                print(f"Warning: could not load {backbone}: {exc}")
+                logger.warning("Could not load %s: %s", backbone, exc)
         else:
-            print(f"Info: checkpoint not found for {backbone} at {ckpt} — skipping")
+            logger.info("Checkpoint not found for %s at %s — skipping", backbone, ckpt)
 
     if not engines:
         # No checkpoints found — create random-weight engines for demo mode
-        print("Warning: no checkpoints found; using random-weight models for demo")
+        using_random_weights = True
+        logger.warning(
+            "No trained checkpoints found in %s — ensemble is running with "
+            "random-weight models. Confidence scores will NOT reflect a trained "
+            "model. Expected files: outputs/checkpoints/<backbone>_best.pth",
+            checkpoints_dir,
+        )
         for backbone in backbones:
             try:
                 engine = load_vfl_model(
@@ -1104,7 +1212,7 @@ def load_multi_model_ensemble(
                 )
                 engines[backbone] = engine
             except Exception as exc:
-                print(f"Warning: could not build {backbone}: {exc}")
+                logger.warning("Could not build %s: %s", backbone, exc)
 
     if not engines:
         raise RuntimeError(
@@ -1113,7 +1221,36 @@ def load_multi_model_ensemble(
             "is importable."
         )
 
-    return MultiModelEnsembleEngine(engines=engines, weights=weights)
+    # ----------------------------------------------------------------
+    # Optionally build a Gemini explainer for LLM-generated explanations
+    # ----------------------------------------------------------------
+    gemini_explainer = None
+    if use_langchain and _GEMINI_IMPORT_OK:
+        try:
+            gemini_explainer = GeminiMedicalExplainer()
+            logger.info("GeminiMedicalExplainer loaded — explanations will use Gemini")
+        except ValueError as _ve:
+            logger.warning(
+                "Gemini explainer not initialised (GEMINI_API_KEY not set or invalid): %s. "
+                "Explanations will use static radiology templates. "
+                "Set the GEMINI_API_KEY environment variable to enable Gemini-generated explanations.",
+                _ve,
+            )
+        except Exception as _ge:
+            logger.warning("Gemini explainer init failed: %s. Using template fallback.", _ge)
+    elif use_langchain and not _GEMINI_IMPORT_OK:
+        logger.warning(
+            "use_langchain=True requested but langchain_rag / google-generativeai "
+            "packages are not available. Falling back to static templates. "
+            "Install with: pip install google-generativeai langchain-google-genai"
+        )
+
+    return MultiModelEnsembleEngine(
+        engines=engines,
+        weights=weights,
+        gemini_explainer=gemini_explainer,
+        using_random_weights=using_random_weights,
+    )
 
 
 # ============================================================================

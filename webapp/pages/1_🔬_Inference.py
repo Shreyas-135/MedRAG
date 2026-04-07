@@ -209,6 +209,30 @@ with col2:
                 st.session_state['last_temp_path'] = str(temp_path)
                 st.session_state['last_patient_info'] = patient_info
 
+                # ── Diagnostic banners ──────────────────────────────────────
+                if result.get("using_random_weights"):
+                    st.warning(
+                        "⚠️ **No trained checkpoints found** — the model is "
+                        "running with **randomly initialised weights**. "
+                        "The confidence score and predictions are **not meaningful**. "
+                        "Train the model first (e.g. `python src/train_multimodel.py`) "
+                        "and place the checkpoint files under "
+                        "`outputs/checkpoints/<backbone>_best.pth`."
+                    )
+
+                rag_src = result.get("rag_source", "template")
+                if rag_src == "template":
+                    st.info(
+                        "ℹ️ **RAG explanation source:** static radiology template. "
+                        "Set the `GEMINI_API_KEY` environment variable to enable "
+                        "Gemini-generated explanations."
+                    )
+                elif rag_src == "fallback":
+                    st.info(
+                        "ℹ️ **RAG explanation source:** Gemini fallback (API call failed). "
+                        "Check that `GEMINI_API_KEY` is valid and try again."
+                    )
+
                 # ────────────────────────────────────────────────────────────
                 # Display results
                 # ────────────────────────────────────────────────────────────
@@ -264,17 +288,21 @@ with col2:
                     st.markdown("---")
 
                 # RAG Explanation
-                st.markdown("### 🧠 RAG Explanation")
-                explanation_text = result.get("explanation_text") or result.get("rag_explanation", "")
-                if explanation_text:
+                rag_src_display = {
+                    "gemini": "🤖 Gemini AI",
+                    "gemini-1.5-flash": "🤖 Gemini AI",
+                    "fallback": "📋 Fallback (Gemini unavailable)",
+                    "template": "📄 Static Template",
+                }.get(rag_src, f"📄 {rag_src}")
+                st.markdown(f"### 🧠 RAG Explanation  <small style='font-weight:normal;color:grey'>— source: {rag_src_display}</small>", unsafe_allow_html=True)
+                explanation_text = result.get("rag_explanation") or result.get("explanation_text") or result.get("guidelines", None)
+                if isinstance(explanation_text, str) and explanation_text:
                     st.info(explanation_text)
+                elif isinstance(explanation_text, list) and explanation_text:
+                    for g in explanation_text:
+                        st.markdown(f"- {g}")
                 else:
-                    guidelines = result.get("guidelines", [])
-                    if guidelines:
-                        for g in guidelines:
-                            st.markdown(f"- {g}")
-                    else:
-                        st.info("No RAG explanation available for this prediction.")
+                    st.info("No RAG explanation available for this prediction.")
 
                 st.markdown("---")
 
