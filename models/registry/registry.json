@@ -1,1 +1,1685 @@
-{}
+{
+  "v1.0_round1_20260407_101011": {
+    "version_id": "v1.0_round1_20260407_101011",
+    "round_num": 1,
+    "metrics": {
+      "val_accuracy": 80.0,
+      "val_loss": 1.1604959964752197,
+      "test_accuracy": 40.0,
+      "test_loss": 1.265994668006897
+    },
+    "config": {
+      "theta": 0.1,
+      "num_clients": 4,
+      "use_rag": true,
+      "use_blockchain": false,
+      "datasize": 0.0125,
+      "epoch": 1,
+      "class_names": [
+        "covid",
+        "lung_opacity",
+        "normal",
+        "pneumonia"
+      ],
+      "num_classes": 4,
+      "backbone": "resnet_vgg",
+      "model_role": "server"
+    },
+    "model_hash": "530c0cb5ed08dbf966ba2e85911b46ac177880a7b4583f7d3f202affbd8a82aa",
+    "sha256": "530c0cb5ed08dbf966ba2e85911b46ac177880a7b4583f7d3f202affbd8a82aa",
+    "timestamp": "2026-04-07T10:10:11.299368",
+    "checkpoint_path": "C:\\Users\\reeve\\MedRAG\\models\\registry\\checkpoints\\v1.0_round1_20260407_101011.pt",
+    "backbone": "resnet_vgg",
+    "model_name": "resnet_vgg"
+  },
+  "v1.1_round1_20260407_101011": {
+    "version_id": "v1.1_round1_20260407_101011",
+    "round_num": 1,
+    "metrics": {
+      "val_accuracy": 80.0,
+      "val_loss": 1.1604959964752197,
+      "test_accuracy": 40.0,
+      "test_loss": 1.265994668006897,
+      "hospital": "Hospital A"
+    },
+    "config": {
+      "theta": 0.1,
+      "num_clients": 4,
+      "use_rag": true,
+      "use_blockchain": false,
+      "datasize": 0.0125,
+      "epoch": 1,
+      "class_names": [
+        "covid",
+        "lung_opacity",
+        "normal",
+        "pneumonia"
+      ],
+      "num_classes": 4,
+      "backbone": "resnet_vgg",
+      "hospital": "Hospital A",
+      "model_role": "client",
+      "classes": [
+        "covid",
+        "lung_opacity",
+        "normal",
+        "pneumonia"
+      ]
+    },
+    "model_hash": "6093d74449c7742f069fa304f1bf3bd5bab5bdcdd4a4821fc53f7a34e6a67eab",
+    "sha256": "6093d74449c7742f069fa304f1bf3bd5bab5bdcdd4a4821fc53f7a34e6a67eab",
+    "timestamp": "2026-04-07T10:10:17.690158",
+    "checkpoint_path": "C:\\Users\\reeve\\MedRAG\\models\\registry\\checkpoints\\v1.1_round1_20260407_101011.pt",
+    "backbone": "resnet_vgg",
+    "model_name": "resnet_vgg",
+    "hospital": "Hospital A"
+  },
+  "v1.2_round1_20260407_101017": {
+    "version_id": "v1.2_round1_20260407_101017",
+    "round_num": 1,
+    "metrics": {
+      "val_accuracy": 80.0,
+      "val_loss": 1.1604959964752197,
+      "test_accuracy": 40.0,
+      "test_loss": 1.265994668006897,
+      "hospital": "Hospital B"
+    },
+    "config": {
+      "theta": 0.1,
+      "num_clients": 4,
+      "use_rag": true,
+      "use_blockchain": false,
+      "datasize": 0.0125,
+      "epoch": 1,
+      "class_names": [
+        "covid",
+        "lung_opacity",
+        "normal",
+        "pneumonia"
+      ],
+      "num_classes": 4,
+      "backbone": "resnet_vgg",
+      "hospital": "Hospital B",
+      "model_role": "client",
+      "classes": [
+        "covid",
+        "lung_opacity",
+        "normal",
+        "pneumonia"
+      ]
+    },
+    "model_hash": "e92c59a380d446d7d907631d34becdc36a5e7f98942e9c44a547753e4cb9c028",
+    "sha256": "e92c59a380d446d7d907631d34becdc36a5e7f98942e9c44a547753e4cb9c028",
+    "timestamp": "2026-04-07T10:10:23.784032",
+    "checkpoint_path": "C:\\Users\\reeve\\MedRAG\\models\\registry\\checkpoints\\v1.2_round1_20260407_101017.pt",
+    "backbone": "resnet_vgg",
+    "model_name": "resnet_vgg",
+    "hospital": "Hospital B"
+  },
+  "v1.3_round1_20260407_101023": {
+    "version_id": "v1.3_round1_20260407_101023",
+    "round_num": 1,
+    "metrics": {
+      "val_accuracy": 80.0,
+      "val_loss": 1.1604959964752197,
+      "test_accuracy": 40.0,
+      "test_loss": 1.265994668006897,
+      "hospital": "Hospital C"
+    },
+    "config": {
+      "theta": 0.1,
+      "num_clients": 4,
+      "use_rag": true,
+      "use_blockchain": false,
+      "datasize": 0.0125,
+      "epoch": 1,
+      "class_names": [
+        "covid",
+        "lung_opacity",
+        "normal",
+        "pneumonia"
+      ],
+      "num_classes": 4,
+      "backbone": "resnet_vgg",
+      "hospital": "Hospital C",
+      "model_role": "client",
+      "classes": [
+        "covid",
+        "lung_opacity",
+        "normal",
+        "pneumonia"
+      ]
+    },
+    "model_hash": "f0c0b1490d302fd00fe5909aad4e473a934f741f75fbd7af787e62afe8b88da8",
+    "sha256": "f0c0b1490d302fd00fe5909aad4e473a934f741f75fbd7af787e62afe8b88da8",
+    "timestamp": "2026-04-07T10:10:26.418398",
+    "checkpoint_path": "C:\\Users\\reeve\\MedRAG\\models\\registry\\checkpoints\\v1.3_round1_20260407_101023.pt",
+    "backbone": "resnet_vgg",
+    "model_name": "resnet_vgg",
+    "hospital": "Hospital C"
+  },
+  "v1.4_round1_20260407_101026": {
+    "version_id": "v1.4_round1_20260407_101026",
+    "round_num": 1,
+    "metrics": {
+      "val_accuracy": 80.0,
+      "val_loss": 1.1604959964752197,
+      "test_accuracy": 40.0,
+      "test_loss": 1.265994668006897,
+      "hospital": "Hospital D"
+    },
+    "config": {
+      "theta": 0.1,
+      "num_clients": 4,
+      "use_rag": true,
+      "use_blockchain": false,
+      "datasize": 0.0125,
+      "epoch": 1,
+      "class_names": [
+        "covid",
+        "lung_opacity",
+        "normal",
+        "pneumonia"
+      ],
+      "num_classes": 4,
+      "backbone": "resnet_vgg",
+      "hospital": "Hospital D",
+      "model_role": "client",
+      "classes": [
+        "covid",
+        "lung_opacity",
+        "normal",
+        "pneumonia"
+      ]
+    },
+    "model_hash": "71d9ae1a3ac8b4e8b05e03cfbae7f35cc54e60d2f6b566b02c8d2d643ccd4d52",
+    "sha256": "71d9ae1a3ac8b4e8b05e03cfbae7f35cc54e60d2f6b566b02c8d2d643ccd4d52",
+    "timestamp": "2026-04-07T10:10:29.055841",
+    "checkpoint_path": "C:\\Users\\reeve\\MedRAG\\models\\registry\\checkpoints\\v1.4_round1_20260407_101026.pt",
+    "backbone": "resnet_vgg",
+    "model_name": "resnet_vgg",
+    "hospital": "Hospital D"
+  },
+  "v1.5_round2_20260407_101408": {
+    "version_id": "v1.5_round2_20260407_101408",
+    "round_num": 2,
+    "metrics": {
+      "val_accuracy": 90.0,
+      "val_loss": 1.0296332836151123,
+      "test_accuracy": 30.0,
+      "test_loss": 1.4002879858016968
+    },
+    "config": {
+      "theta": 0.1,
+      "num_clients": 4,
+      "use_rag": true,
+      "use_blockchain": false,
+      "datasize": 0.0125,
+      "epoch": 2,
+      "class_names": [
+        "covid",
+        "lung_opacity",
+        "normal",
+        "pneumonia"
+      ],
+      "num_classes": 4,
+      "backbone": "resnet_vgg",
+      "model_role": "server"
+    },
+    "model_hash": "c970443b536914a955beb868897eb60d69b481af64ebf3686b536ccda3db4e04",
+    "sha256": "c970443b536914a955beb868897eb60d69b481af64ebf3686b536ccda3db4e04",
+    "timestamp": "2026-04-07T10:14:08.341054",
+    "checkpoint_path": "C:\\Users\\reeve\\MedRAG\\models\\registry\\checkpoints\\v1.5_round2_20260407_101408.pt",
+    "backbone": "resnet_vgg",
+    "model_name": "resnet_vgg"
+  },
+  "v1.6_round2_20260407_101408": {
+    "version_id": "v1.6_round2_20260407_101408",
+    "round_num": 2,
+    "metrics": {
+      "val_accuracy": 90.0,
+      "val_loss": 1.0296332836151123,
+      "test_accuracy": 30.0,
+      "test_loss": 1.4002879858016968,
+      "hospital": "Hospital A"
+    },
+    "config": {
+      "theta": 0.1,
+      "num_clients": 4,
+      "use_rag": true,
+      "use_blockchain": false,
+      "datasize": 0.0125,
+      "epoch": 2,
+      "class_names": [
+        "covid",
+        "lung_opacity",
+        "normal",
+        "pneumonia"
+      ],
+      "num_classes": 4,
+      "backbone": "resnet_vgg",
+      "hospital": "Hospital A",
+      "model_role": "client",
+      "classes": [
+        "covid",
+        "lung_opacity",
+        "normal",
+        "pneumonia"
+      ]
+    },
+    "model_hash": "daf95960058a2453a4f8751fb8628de294ee1253acb853f5703d55514ea64d99",
+    "sha256": "daf95960058a2453a4f8751fb8628de294ee1253acb853f5703d55514ea64d99",
+    "timestamp": "2026-04-07T10:14:38.908097",
+    "checkpoint_path": "C:\\Users\\reeve\\MedRAG\\models\\registry\\checkpoints\\v1.6_round2_20260407_101408.pt",
+    "backbone": "resnet_vgg",
+    "model_name": "resnet_vgg",
+    "hospital": "Hospital A"
+  },
+  "v1.7_round2_20260407_101439": {
+    "version_id": "v1.7_round2_20260407_101439",
+    "round_num": 2,
+    "metrics": {
+      "val_accuracy": 90.0,
+      "val_loss": 1.0296332836151123,
+      "test_accuracy": 30.0,
+      "test_loss": 1.4002879858016968,
+      "hospital": "Hospital B"
+    },
+    "config": {
+      "theta": 0.1,
+      "num_clients": 4,
+      "use_rag": true,
+      "use_blockchain": false,
+      "datasize": 0.0125,
+      "epoch": 2,
+      "class_names": [
+        "covid",
+        "lung_opacity",
+        "normal",
+        "pneumonia"
+      ],
+      "num_classes": 4,
+      "backbone": "resnet_vgg",
+      "hospital": "Hospital B",
+      "model_role": "client",
+      "classes": [
+        "covid",
+        "lung_opacity",
+        "normal",
+        "pneumonia"
+      ]
+    },
+    "model_hash": "5a68dc5c6b7f840c58b22a4a49daea5d5f3dd86cdab068911097fdadb1f25ee9",
+    "sha256": "5a68dc5c6b7f840c58b22a4a49daea5d5f3dd86cdab068911097fdadb1f25ee9",
+    "timestamp": "2026-04-07T10:14:45.892140",
+    "checkpoint_path": "C:\\Users\\reeve\\MedRAG\\models\\registry\\checkpoints\\v1.7_round2_20260407_101439.pt",
+    "backbone": "resnet_vgg",
+    "model_name": "resnet_vgg",
+    "hospital": "Hospital B"
+  },
+  "v1.8_round2_20260407_101445": {
+    "version_id": "v1.8_round2_20260407_101445",
+    "round_num": 2,
+    "metrics": {
+      "val_accuracy": 90.0,
+      "val_loss": 1.0296332836151123,
+      "test_accuracy": 30.0,
+      "test_loss": 1.4002879858016968,
+      "hospital": "Hospital C"
+    },
+    "config": {
+      "theta": 0.1,
+      "num_clients": 4,
+      "use_rag": true,
+      "use_blockchain": false,
+      "datasize": 0.0125,
+      "epoch": 2,
+      "class_names": [
+        "covid",
+        "lung_opacity",
+        "normal",
+        "pneumonia"
+      ],
+      "num_classes": 4,
+      "backbone": "resnet_vgg",
+      "hospital": "Hospital C",
+      "model_role": "client",
+      "classes": [
+        "covid",
+        "lung_opacity",
+        "normal",
+        "pneumonia"
+      ]
+    },
+    "model_hash": "b9d6cb1293bbf8c20536a445057eb262cf958aa87f420da55447b0822a976ce3",
+    "sha256": "b9d6cb1293bbf8c20536a445057eb262cf958aa87f420da55447b0822a976ce3",
+    "timestamp": "2026-04-07T10:14:47.024186",
+    "checkpoint_path": "C:\\Users\\reeve\\MedRAG\\models\\registry\\checkpoints\\v1.8_round2_20260407_101445.pt",
+    "backbone": "resnet_vgg",
+    "model_name": "resnet_vgg",
+    "hospital": "Hospital C"
+  },
+  "v1.9_round2_20260407_101447": {
+    "version_id": "v1.9_round2_20260407_101447",
+    "round_num": 2,
+    "metrics": {
+      "val_accuracy": 90.0,
+      "val_loss": 1.0296332836151123,
+      "test_accuracy": 30.0,
+      "test_loss": 1.4002879858016968,
+      "hospital": "Hospital D"
+    },
+    "config": {
+      "theta": 0.1,
+      "num_clients": 4,
+      "use_rag": true,
+      "use_blockchain": false,
+      "datasize": 0.0125,
+      "epoch": 2,
+      "class_names": [
+        "covid",
+        "lung_opacity",
+        "normal",
+        "pneumonia"
+      ],
+      "num_classes": 4,
+      "backbone": "resnet_vgg",
+      "hospital": "Hospital D",
+      "model_role": "client",
+      "classes": [
+        "covid",
+        "lung_opacity",
+        "normal",
+        "pneumonia"
+      ]
+    },
+    "model_hash": "6088a2b8397ac9822ab3b39354722c1646424887e153370ec5a2a1ccd793084d",
+    "sha256": "6088a2b8397ac9822ab3b39354722c1646424887e153370ec5a2a1ccd793084d",
+    "timestamp": "2026-04-07T10:14:48.016618",
+    "checkpoint_path": "C:\\Users\\reeve\\MedRAG\\models\\registry\\checkpoints\\v1.9_round2_20260407_101447.pt",
+    "backbone": "resnet_vgg",
+    "model_name": "resnet_vgg",
+    "hospital": "Hospital D"
+  },
+  "v1.10_round3_20260407_101831": {
+    "version_id": "v1.10_round3_20260407_101831",
+    "round_num": 3,
+    "metrics": {
+      "val_accuracy": 100.0,
+      "val_loss": 0.9114887118339539,
+      "test_accuracy": 60.0,
+      "test_loss": 1.1881625652313232
+    },
+    "config": {
+      "theta": 0.1,
+      "num_clients": 4,
+      "use_rag": true,
+      "use_blockchain": false,
+      "datasize": 0.0125,
+      "epoch": 3,
+      "class_names": [
+        "covid",
+        "lung_opacity",
+        "normal",
+        "pneumonia"
+      ],
+      "num_classes": 4,
+      "backbone": "resnet_vgg",
+      "model_role": "server"
+    },
+    "model_hash": "ba57eedefbb83b1d5bbdc74e8083ba3585d1d783c8bb010592ee62514ef3892c",
+    "sha256": "ba57eedefbb83b1d5bbdc74e8083ba3585d1d783c8bb010592ee62514ef3892c",
+    "timestamp": "2026-04-07T10:18:32.027223",
+    "checkpoint_path": "C:\\Users\\reeve\\MedRAG\\models\\registry\\checkpoints\\v1.10_round3_20260407_101831.pt",
+    "backbone": "resnet_vgg",
+    "model_name": "resnet_vgg"
+  },
+  "v1.11_round3_20260407_101832": {
+    "version_id": "v1.11_round3_20260407_101832",
+    "round_num": 3,
+    "metrics": {
+      "val_accuracy": 100.0,
+      "val_loss": 0.9114887118339539,
+      "test_accuracy": 60.0,
+      "test_loss": 1.1881625652313232,
+      "hospital": "Hospital A"
+    },
+    "config": {
+      "theta": 0.1,
+      "num_clients": 4,
+      "use_rag": true,
+      "use_blockchain": false,
+      "datasize": 0.0125,
+      "epoch": 3,
+      "class_names": [
+        "covid",
+        "lung_opacity",
+        "normal",
+        "pneumonia"
+      ],
+      "num_classes": 4,
+      "backbone": "resnet_vgg",
+      "hospital": "Hospital A",
+      "model_role": "client",
+      "classes": [
+        "covid",
+        "lung_opacity",
+        "normal",
+        "pneumonia"
+      ]
+    },
+    "model_hash": "67d6121acd4a903cab0ae260bd97b571c111995cc2b8e68a5f208de74332af55",
+    "sha256": "67d6121acd4a903cab0ae260bd97b571c111995cc2b8e68a5f208de74332af55",
+    "timestamp": "2026-04-07T10:18:38.201389",
+    "checkpoint_path": "C:\\Users\\reeve\\MedRAG\\models\\registry\\checkpoints\\v1.11_round3_20260407_101832.pt",
+    "backbone": "resnet_vgg",
+    "model_name": "resnet_vgg",
+    "hospital": "Hospital A"
+  },
+  "v1.12_round3_20260407_101838": {
+    "version_id": "v1.12_round3_20260407_101838",
+    "round_num": 3,
+    "metrics": {
+      "val_accuracy": 100.0,
+      "val_loss": 0.9114887118339539,
+      "test_accuracy": 60.0,
+      "test_loss": 1.1881625652313232,
+      "hospital": "Hospital B"
+    },
+    "config": {
+      "theta": 0.1,
+      "num_clients": 4,
+      "use_rag": true,
+      "use_blockchain": false,
+      "datasize": 0.0125,
+      "epoch": 3,
+      "class_names": [
+        "covid",
+        "lung_opacity",
+        "normal",
+        "pneumonia"
+      ],
+      "num_classes": 4,
+      "backbone": "resnet_vgg",
+      "hospital": "Hospital B",
+      "model_role": "client",
+      "classes": [
+        "covid",
+        "lung_opacity",
+        "normal",
+        "pneumonia"
+      ]
+    },
+    "model_hash": "5f39e3404f758684d35fe070647d4fa8e0fd9913a7720fd58936770e6bb590a8",
+    "sha256": "5f39e3404f758684d35fe070647d4fa8e0fd9913a7720fd58936770e6bb590a8",
+    "timestamp": "2026-04-07T10:18:45.852988",
+    "checkpoint_path": "C:\\Users\\reeve\\MedRAG\\models\\registry\\checkpoints\\v1.12_round3_20260407_101838.pt",
+    "backbone": "resnet_vgg",
+    "model_name": "resnet_vgg",
+    "hospital": "Hospital B"
+  },
+  "v1.13_round3_20260407_101845": {
+    "version_id": "v1.13_round3_20260407_101845",
+    "round_num": 3,
+    "metrics": {
+      "val_accuracy": 100.0,
+      "val_loss": 0.9114887118339539,
+      "test_accuracy": 60.0,
+      "test_loss": 1.1881625652313232,
+      "hospital": "Hospital C"
+    },
+    "config": {
+      "theta": 0.1,
+      "num_clients": 4,
+      "use_rag": true,
+      "use_blockchain": false,
+      "datasize": 0.0125,
+      "epoch": 3,
+      "class_names": [
+        "covid",
+        "lung_opacity",
+        "normal",
+        "pneumonia"
+      ],
+      "num_classes": 4,
+      "backbone": "resnet_vgg",
+      "hospital": "Hospital C",
+      "model_role": "client",
+      "classes": [
+        "covid",
+        "lung_opacity",
+        "normal",
+        "pneumonia"
+      ]
+    },
+    "model_hash": "f5e58567b027adb44a624f19ce3ef280f8a2b8abcc56c3debfa557270017ff0c",
+    "sha256": "f5e58567b027adb44a624f19ce3ef280f8a2b8abcc56c3debfa557270017ff0c",
+    "timestamp": "2026-04-07T10:18:48.401407",
+    "checkpoint_path": "C:\\Users\\reeve\\MedRAG\\models\\registry\\checkpoints\\v1.13_round3_20260407_101845.pt",
+    "backbone": "resnet_vgg",
+    "model_name": "resnet_vgg",
+    "hospital": "Hospital C"
+  },
+  "v1.14_round3_20260407_101848": {
+    "version_id": "v1.14_round3_20260407_101848",
+    "round_num": 3,
+    "metrics": {
+      "val_accuracy": 100.0,
+      "val_loss": 0.9114887118339539,
+      "test_accuracy": 60.0,
+      "test_loss": 1.1881625652313232,
+      "hospital": "Hospital D"
+    },
+    "config": {
+      "theta": 0.1,
+      "num_clients": 4,
+      "use_rag": true,
+      "use_blockchain": false,
+      "datasize": 0.0125,
+      "epoch": 3,
+      "class_names": [
+        "covid",
+        "lung_opacity",
+        "normal",
+        "pneumonia"
+      ],
+      "num_classes": 4,
+      "backbone": "resnet_vgg",
+      "hospital": "Hospital D",
+      "model_role": "client",
+      "classes": [
+        "covid",
+        "lung_opacity",
+        "normal",
+        "pneumonia"
+      ]
+    },
+    "model_hash": "f08be8375767e728be6d8aee76361671e489edf2e40e17004984c2b9964f7bd8",
+    "sha256": "f08be8375767e728be6d8aee76361671e489edf2e40e17004984c2b9964f7bd8",
+    "timestamp": "2026-04-07T10:18:50.957168",
+    "checkpoint_path": "C:\\Users\\reeve\\MedRAG\\models\\registry\\checkpoints\\v1.14_round3_20260407_101848.pt",
+    "backbone": "resnet_vgg",
+    "model_name": "resnet_vgg",
+    "hospital": "Hospital D"
+  },
+  "v1.15_round4_20260407_102228": {
+    "version_id": "v1.15_round4_20260407_102228",
+    "round_num": 4,
+    "metrics": {
+      "val_accuracy": 100.0,
+      "val_loss": 0.7688983082771301,
+      "test_accuracy": 60.0,
+      "test_loss": 1.2603119611740112
+    },
+    "config": {
+      "theta": 0.1,
+      "num_clients": 4,
+      "use_rag": true,
+      "use_blockchain": false,
+      "datasize": 0.0125,
+      "epoch": 4,
+      "class_names": [
+        "covid",
+        "lung_opacity",
+        "normal",
+        "pneumonia"
+      ],
+      "num_classes": 4,
+      "backbone": "resnet_vgg",
+      "model_role": "server"
+    },
+    "model_hash": "b72441b57cc891e2b2272888ece41febac672f4e9f32e177e7360cce5f3c6b9c",
+    "sha256": "b72441b57cc891e2b2272888ece41febac672f4e9f32e177e7360cce5f3c6b9c",
+    "timestamp": "2026-04-07T10:22:28.135721",
+    "checkpoint_path": "C:\\Users\\reeve\\MedRAG\\models\\registry\\checkpoints\\v1.15_round4_20260407_102228.pt",
+    "backbone": "resnet_vgg",
+    "model_name": "resnet_vgg"
+  },
+  "v1.16_round4_20260407_102228": {
+    "version_id": "v1.16_round4_20260407_102228",
+    "round_num": 4,
+    "metrics": {
+      "val_accuracy": 100.0,
+      "val_loss": 0.7688983082771301,
+      "test_accuracy": 60.0,
+      "test_loss": 1.2603119611740112,
+      "hospital": "Hospital A"
+    },
+    "config": {
+      "theta": 0.1,
+      "num_clients": 4,
+      "use_rag": true,
+      "use_blockchain": false,
+      "datasize": 0.0125,
+      "epoch": 4,
+      "class_names": [
+        "covid",
+        "lung_opacity",
+        "normal",
+        "pneumonia"
+      ],
+      "num_classes": 4,
+      "backbone": "resnet_vgg",
+      "hospital": "Hospital A",
+      "model_role": "client",
+      "classes": [
+        "covid",
+        "lung_opacity",
+        "normal",
+        "pneumonia"
+      ]
+    },
+    "model_hash": "ff7c5c09f7263d7401bc259f2c8e53c7143504d4a518c733251a1d4eb4286628",
+    "sha256": "ff7c5c09f7263d7401bc259f2c8e53c7143504d4a518c733251a1d4eb4286628",
+    "timestamp": "2026-04-07T10:22:34.991446",
+    "checkpoint_path": "C:\\Users\\reeve\\MedRAG\\models\\registry\\checkpoints\\v1.16_round4_20260407_102228.pt",
+    "backbone": "resnet_vgg",
+    "model_name": "resnet_vgg",
+    "hospital": "Hospital A"
+  },
+  "v1.17_round4_20260407_102235": {
+    "version_id": "v1.17_round4_20260407_102235",
+    "round_num": 4,
+    "metrics": {
+      "val_accuracy": 100.0,
+      "val_loss": 0.7688983082771301,
+      "test_accuracy": 60.0,
+      "test_loss": 1.2603119611740112,
+      "hospital": "Hospital B"
+    },
+    "config": {
+      "theta": 0.1,
+      "num_clients": 4,
+      "use_rag": true,
+      "use_blockchain": false,
+      "datasize": 0.0125,
+      "epoch": 4,
+      "class_names": [
+        "covid",
+        "lung_opacity",
+        "normal",
+        "pneumonia"
+      ],
+      "num_classes": 4,
+      "backbone": "resnet_vgg",
+      "hospital": "Hospital B",
+      "model_role": "client",
+      "classes": [
+        "covid",
+        "lung_opacity",
+        "normal",
+        "pneumonia"
+      ]
+    },
+    "model_hash": "7b436b3490c9fa194d0507730a1b88d57c5b6ba86a4d15d41c94a22effd82af9",
+    "sha256": "7b436b3490c9fa194d0507730a1b88d57c5b6ba86a4d15d41c94a22effd82af9",
+    "timestamp": "2026-04-07T10:22:39.818136",
+    "checkpoint_path": "C:\\Users\\reeve\\MedRAG\\models\\registry\\checkpoints\\v1.17_round4_20260407_102235.pt",
+    "backbone": "resnet_vgg",
+    "model_name": "resnet_vgg",
+    "hospital": "Hospital B"
+  },
+  "v1.18_round4_20260407_102239": {
+    "version_id": "v1.18_round4_20260407_102239",
+    "round_num": 4,
+    "metrics": {
+      "val_accuracy": 100.0,
+      "val_loss": 0.7688983082771301,
+      "test_accuracy": 60.0,
+      "test_loss": 1.2603119611740112,
+      "hospital": "Hospital C"
+    },
+    "config": {
+      "theta": 0.1,
+      "num_clients": 4,
+      "use_rag": true,
+      "use_blockchain": false,
+      "datasize": 0.0125,
+      "epoch": 4,
+      "class_names": [
+        "covid",
+        "lung_opacity",
+        "normal",
+        "pneumonia"
+      ],
+      "num_classes": 4,
+      "backbone": "resnet_vgg",
+      "hospital": "Hospital C",
+      "model_role": "client",
+      "classes": [
+        "covid",
+        "lung_opacity",
+        "normal",
+        "pneumonia"
+      ]
+    },
+    "model_hash": "f4566db59d1128b45a552619e1396108b551c5be6e816399a5f58072eed0aa0d",
+    "sha256": "f4566db59d1128b45a552619e1396108b551c5be6e816399a5f58072eed0aa0d",
+    "timestamp": "2026-04-07T10:22:48.376566",
+    "checkpoint_path": "C:\\Users\\reeve\\MedRAG\\models\\registry\\checkpoints\\v1.18_round4_20260407_102239.pt",
+    "backbone": "resnet_vgg",
+    "model_name": "resnet_vgg",
+    "hospital": "Hospital C"
+  },
+  "v1.19_round4_20260407_102248": {
+    "version_id": "v1.19_round4_20260407_102248",
+    "round_num": 4,
+    "metrics": {
+      "val_accuracy": 100.0,
+      "val_loss": 0.7688983082771301,
+      "test_accuracy": 60.0,
+      "test_loss": 1.2603119611740112,
+      "hospital": "Hospital D"
+    },
+    "config": {
+      "theta": 0.1,
+      "num_clients": 4,
+      "use_rag": true,
+      "use_blockchain": false,
+      "datasize": 0.0125,
+      "epoch": 4,
+      "class_names": [
+        "covid",
+        "lung_opacity",
+        "normal",
+        "pneumonia"
+      ],
+      "num_classes": 4,
+      "backbone": "resnet_vgg",
+      "hospital": "Hospital D",
+      "model_role": "client",
+      "classes": [
+        "covid",
+        "lung_opacity",
+        "normal",
+        "pneumonia"
+      ]
+    },
+    "model_hash": "2b8743dfae56d0f9a42c80636807b2c899502c0a6ed695bd7392e72c44bfc541",
+    "sha256": "2b8743dfae56d0f9a42c80636807b2c899502c0a6ed695bd7392e72c44bfc541",
+    "timestamp": "2026-04-07T10:22:54.510833",
+    "checkpoint_path": "C:\\Users\\reeve\\MedRAG\\models\\registry\\checkpoints\\v1.19_round4_20260407_102248.pt",
+    "backbone": "resnet_vgg",
+    "model_name": "resnet_vgg",
+    "hospital": "Hospital D"
+  },
+  "v1.20_round5_20260407_102659": {
+    "version_id": "v1.20_round5_20260407_102659",
+    "round_num": 5,
+    "metrics": {
+      "val_accuracy": 100.0,
+      "val_loss": 0.7454755902290344,
+      "test_accuracy": 60.0,
+      "test_loss": 1.0700846910476685
+    },
+    "config": {
+      "theta": 0.1,
+      "num_clients": 4,
+      "use_rag": true,
+      "use_blockchain": false,
+      "datasize": 0.0125,
+      "epoch": 5,
+      "class_names": [
+        "covid",
+        "lung_opacity",
+        "normal",
+        "pneumonia"
+      ],
+      "num_classes": 4,
+      "backbone": "resnet_vgg",
+      "model_role": "server"
+    },
+    "model_hash": "8b13ca10b0f6649aa0f99576021d42aa63076a4fee91c436a2678f491de1eb44",
+    "sha256": "8b13ca10b0f6649aa0f99576021d42aa63076a4fee91c436a2678f491de1eb44",
+    "timestamp": "2026-04-07T10:26:59.704489",
+    "checkpoint_path": "C:\\Users\\reeve\\MedRAG\\models\\registry\\checkpoints\\v1.20_round5_20260407_102659.pt",
+    "backbone": "resnet_vgg",
+    "model_name": "resnet_vgg"
+  },
+  "v1.21_round5_20260407_102659": {
+    "version_id": "v1.21_round5_20260407_102659",
+    "round_num": 5,
+    "metrics": {
+      "val_accuracy": 100.0,
+      "val_loss": 0.7454755902290344,
+      "test_accuracy": 60.0,
+      "test_loss": 1.0700846910476685,
+      "hospital": "Hospital A"
+    },
+    "config": {
+      "theta": 0.1,
+      "num_clients": 4,
+      "use_rag": true,
+      "use_blockchain": false,
+      "datasize": 0.0125,
+      "epoch": 5,
+      "class_names": [
+        "covid",
+        "lung_opacity",
+        "normal",
+        "pneumonia"
+      ],
+      "num_classes": 4,
+      "backbone": "resnet_vgg",
+      "hospital": "Hospital A",
+      "model_role": "client",
+      "classes": [
+        "covid",
+        "lung_opacity",
+        "normal",
+        "pneumonia"
+      ]
+    },
+    "model_hash": "42b685d0707fcfc5a8a9a8bd1ccdee75c1b50e2d9df04083578bad154dcc50c6",
+    "sha256": "42b685d0707fcfc5a8a9a8bd1ccdee75c1b50e2d9df04083578bad154dcc50c6",
+    "timestamp": "2026-04-07T10:27:07.933526",
+    "checkpoint_path": "C:\\Users\\reeve\\MedRAG\\models\\registry\\checkpoints\\v1.21_round5_20260407_102659.pt",
+    "backbone": "resnet_vgg",
+    "model_name": "resnet_vgg",
+    "hospital": "Hospital A"
+  },
+  "v1.22_round5_20260407_102707": {
+    "version_id": "v1.22_round5_20260407_102707",
+    "round_num": 5,
+    "metrics": {
+      "val_accuracy": 100.0,
+      "val_loss": 0.7454755902290344,
+      "test_accuracy": 60.0,
+      "test_loss": 1.0700846910476685,
+      "hospital": "Hospital B"
+    },
+    "config": {
+      "theta": 0.1,
+      "num_clients": 4,
+      "use_rag": true,
+      "use_blockchain": false,
+      "datasize": 0.0125,
+      "epoch": 5,
+      "class_names": [
+        "covid",
+        "lung_opacity",
+        "normal",
+        "pneumonia"
+      ],
+      "num_classes": 4,
+      "backbone": "resnet_vgg",
+      "hospital": "Hospital B",
+      "model_role": "client",
+      "classes": [
+        "covid",
+        "lung_opacity",
+        "normal",
+        "pneumonia"
+      ]
+    },
+    "model_hash": "2d63a7e225e8378b86f5ace37246d45660e055a664329607ef7a7a96e76010db",
+    "sha256": "2d63a7e225e8378b86f5ace37246d45660e055a664329607ef7a7a96e76010db",
+    "timestamp": "2026-04-07T10:27:13.804482",
+    "checkpoint_path": "C:\\Users\\reeve\\MedRAG\\models\\registry\\checkpoints\\v1.22_round5_20260407_102707.pt",
+    "backbone": "resnet_vgg",
+    "model_name": "resnet_vgg",
+    "hospital": "Hospital B"
+  },
+  "v1.23_round5_20260407_102713": {
+    "version_id": "v1.23_round5_20260407_102713",
+    "round_num": 5,
+    "metrics": {
+      "val_accuracy": 100.0,
+      "val_loss": 0.7454755902290344,
+      "test_accuracy": 60.0,
+      "test_loss": 1.0700846910476685,
+      "hospital": "Hospital C"
+    },
+    "config": {
+      "theta": 0.1,
+      "num_clients": 4,
+      "use_rag": true,
+      "use_blockchain": false,
+      "datasize": 0.0125,
+      "epoch": 5,
+      "class_names": [
+        "covid",
+        "lung_opacity",
+        "normal",
+        "pneumonia"
+      ],
+      "num_classes": 4,
+      "backbone": "resnet_vgg",
+      "hospital": "Hospital C",
+      "model_role": "client",
+      "classes": [
+        "covid",
+        "lung_opacity",
+        "normal",
+        "pneumonia"
+      ]
+    },
+    "model_hash": "219bbd22b1ec5bdd9a7536ed0ce5d1023fd1a0d57fad9cffcd0717f9e9106bd9",
+    "sha256": "219bbd22b1ec5bdd9a7536ed0ce5d1023fd1a0d57fad9cffcd0717f9e9106bd9",
+    "timestamp": "2026-04-07T10:27:19.014357",
+    "checkpoint_path": "C:\\Users\\reeve\\MedRAG\\models\\registry\\checkpoints\\v1.23_round5_20260407_102713.pt",
+    "backbone": "resnet_vgg",
+    "model_name": "resnet_vgg",
+    "hospital": "Hospital C"
+  },
+  "v1.24_round5_20260407_102719": {
+    "version_id": "v1.24_round5_20260407_102719",
+    "round_num": 5,
+    "metrics": {
+      "val_accuracy": 100.0,
+      "val_loss": 0.7454755902290344,
+      "test_accuracy": 60.0,
+      "test_loss": 1.0700846910476685,
+      "hospital": "Hospital D"
+    },
+    "config": {
+      "theta": 0.1,
+      "num_clients": 4,
+      "use_rag": true,
+      "use_blockchain": false,
+      "datasize": 0.0125,
+      "epoch": 5,
+      "class_names": [
+        "covid",
+        "lung_opacity",
+        "normal",
+        "pneumonia"
+      ],
+      "num_classes": 4,
+      "backbone": "resnet_vgg",
+      "hospital": "Hospital D",
+      "model_role": "client",
+      "classes": [
+        "covid",
+        "lung_opacity",
+        "normal",
+        "pneumonia"
+      ]
+    },
+    "model_hash": "c8ccc9a51de3479b4cc00bf056585f34adcacd924e3aa1b91a0b3219a7a32f44",
+    "sha256": "c8ccc9a51de3479b4cc00bf056585f34adcacd924e3aa1b91a0b3219a7a32f44",
+    "timestamp": "2026-04-07T10:27:21.527905",
+    "checkpoint_path": "C:\\Users\\reeve\\MedRAG\\models\\registry\\checkpoints\\v1.24_round5_20260407_102719.pt",
+    "backbone": "resnet_vgg",
+    "model_name": "resnet_vgg",
+    "hospital": "Hospital D"
+  },
+  "v1.25_round6_20260407_103158": {
+    "version_id": "v1.25_round6_20260407_103158",
+    "round_num": 6,
+    "metrics": {
+      "val_accuracy": 100.0,
+      "val_loss": 0.7078577280044556,
+      "test_accuracy": 60.0,
+      "test_loss": 1.1423866748809814
+    },
+    "config": {
+      "theta": 0.1,
+      "num_clients": 4,
+      "use_rag": true,
+      "use_blockchain": false,
+      "datasize": 0.0125,
+      "epoch": 6,
+      "class_names": [
+        "covid",
+        "lung_opacity",
+        "normal",
+        "pneumonia"
+      ],
+      "num_classes": 4,
+      "backbone": "resnet_vgg",
+      "model_role": "server"
+    },
+    "model_hash": "cfb9a5e1762df2ff63eb76de5ca5dce4167e4b7f76860d530e7e2522a11ec0a9",
+    "sha256": "cfb9a5e1762df2ff63eb76de5ca5dce4167e4b7f76860d530e7e2522a11ec0a9",
+    "timestamp": "2026-04-07T10:31:58.373254",
+    "checkpoint_path": "C:\\Users\\reeve\\MedRAG\\models\\registry\\checkpoints\\v1.25_round6_20260407_103158.pt",
+    "backbone": "resnet_vgg",
+    "model_name": "resnet_vgg"
+  },
+  "v1.26_round6_20260407_103158": {
+    "version_id": "v1.26_round6_20260407_103158",
+    "round_num": 6,
+    "metrics": {
+      "val_accuracy": 100.0,
+      "val_loss": 0.7078577280044556,
+      "test_accuracy": 60.0,
+      "test_loss": 1.1423866748809814,
+      "hospital": "Hospital A"
+    },
+    "config": {
+      "theta": 0.1,
+      "num_clients": 4,
+      "use_rag": true,
+      "use_blockchain": false,
+      "datasize": 0.0125,
+      "epoch": 6,
+      "class_names": [
+        "covid",
+        "lung_opacity",
+        "normal",
+        "pneumonia"
+      ],
+      "num_classes": 4,
+      "backbone": "resnet_vgg",
+      "hospital": "Hospital A",
+      "model_role": "client",
+      "classes": [
+        "covid",
+        "lung_opacity",
+        "normal",
+        "pneumonia"
+      ]
+    },
+    "model_hash": "4f4bc295bccb52e0cc7bf0874c343c77ac9177117dddca8255cab320dca4de99",
+    "sha256": "4f4bc295bccb52e0cc7bf0874c343c77ac9177117dddca8255cab320dca4de99",
+    "timestamp": "2026-04-07T10:32:05.254889",
+    "checkpoint_path": "C:\\Users\\reeve\\MedRAG\\models\\registry\\checkpoints\\v1.26_round6_20260407_103158.pt",
+    "backbone": "resnet_vgg",
+    "model_name": "resnet_vgg",
+    "hospital": "Hospital A"
+  },
+  "v1.27_round6_20260407_103205": {
+    "version_id": "v1.27_round6_20260407_103205",
+    "round_num": 6,
+    "metrics": {
+      "val_accuracy": 100.0,
+      "val_loss": 0.7078577280044556,
+      "test_accuracy": 60.0,
+      "test_loss": 1.1423866748809814,
+      "hospital": "Hospital B"
+    },
+    "config": {
+      "theta": 0.1,
+      "num_clients": 4,
+      "use_rag": true,
+      "use_blockchain": false,
+      "datasize": 0.0125,
+      "epoch": 6,
+      "class_names": [
+        "covid",
+        "lung_opacity",
+        "normal",
+        "pneumonia"
+      ],
+      "num_classes": 4,
+      "backbone": "resnet_vgg",
+      "hospital": "Hospital B",
+      "model_role": "client",
+      "classes": [
+        "covid",
+        "lung_opacity",
+        "normal",
+        "pneumonia"
+      ]
+    },
+    "model_hash": "27b39f08c9b98e21b6962e5464cce02b9dbb4456b269a0ae3c075204239fa9f0",
+    "sha256": "27b39f08c9b98e21b6962e5464cce02b9dbb4456b269a0ae3c075204239fa9f0",
+    "timestamp": "2026-04-07T10:32:10.692622",
+    "checkpoint_path": "C:\\Users\\reeve\\MedRAG\\models\\registry\\checkpoints\\v1.27_round6_20260407_103205.pt",
+    "backbone": "resnet_vgg",
+    "model_name": "resnet_vgg",
+    "hospital": "Hospital B"
+  },
+  "v1.28_round6_20260407_103210": {
+    "version_id": "v1.28_round6_20260407_103210",
+    "round_num": 6,
+    "metrics": {
+      "val_accuracy": 100.0,
+      "val_loss": 0.7078577280044556,
+      "test_accuracy": 60.0,
+      "test_loss": 1.1423866748809814,
+      "hospital": "Hospital C"
+    },
+    "config": {
+      "theta": 0.1,
+      "num_clients": 4,
+      "use_rag": true,
+      "use_blockchain": false,
+      "datasize": 0.0125,
+      "epoch": 6,
+      "class_names": [
+        "covid",
+        "lung_opacity",
+        "normal",
+        "pneumonia"
+      ],
+      "num_classes": 4,
+      "backbone": "resnet_vgg",
+      "hospital": "Hospital C",
+      "model_role": "client",
+      "classes": [
+        "covid",
+        "lung_opacity",
+        "normal",
+        "pneumonia"
+      ]
+    },
+    "model_hash": "660690e8d81d06a3e861486e46b52eeb8fc19906a12de0ba3daaa709ec283860",
+    "sha256": "660690e8d81d06a3e861486e46b52eeb8fc19906a12de0ba3daaa709ec283860",
+    "timestamp": "2026-04-07T10:32:13.365440",
+    "checkpoint_path": "C:\\Users\\reeve\\MedRAG\\models\\registry\\checkpoints\\v1.28_round6_20260407_103210.pt",
+    "backbone": "resnet_vgg",
+    "model_name": "resnet_vgg",
+    "hospital": "Hospital C"
+  },
+  "v1.29_round6_20260407_103213": {
+    "version_id": "v1.29_round6_20260407_103213",
+    "round_num": 6,
+    "metrics": {
+      "val_accuracy": 100.0,
+      "val_loss": 0.7078577280044556,
+      "test_accuracy": 60.0,
+      "test_loss": 1.1423866748809814,
+      "hospital": "Hospital D"
+    },
+    "config": {
+      "theta": 0.1,
+      "num_clients": 4,
+      "use_rag": true,
+      "use_blockchain": false,
+      "datasize": 0.0125,
+      "epoch": 6,
+      "class_names": [
+        "covid",
+        "lung_opacity",
+        "normal",
+        "pneumonia"
+      ],
+      "num_classes": 4,
+      "backbone": "resnet_vgg",
+      "hospital": "Hospital D",
+      "model_role": "client",
+      "classes": [
+        "covid",
+        "lung_opacity",
+        "normal",
+        "pneumonia"
+      ]
+    },
+    "model_hash": "0e11f84fa0f0eb56efdd47486aebcc951124915085c96e170daeef0fe949ecd6",
+    "sha256": "0e11f84fa0f0eb56efdd47486aebcc951124915085c96e170daeef0fe949ecd6",
+    "timestamp": "2026-04-07T10:32:16.069075",
+    "checkpoint_path": "C:\\Users\\reeve\\MedRAG\\models\\registry\\checkpoints\\v1.29_round6_20260407_103213.pt",
+    "backbone": "resnet_vgg",
+    "model_name": "resnet_vgg",
+    "hospital": "Hospital D"
+  },
+  "v1.30_round7_20260407_103611": {
+    "version_id": "v1.30_round7_20260407_103611",
+    "round_num": 7,
+    "metrics": {
+      "val_accuracy": 100.0,
+      "val_loss": 0.7720468044281006,
+      "test_accuracy": 60.0,
+      "test_loss": 1.0175893306732178
+    },
+    "config": {
+      "theta": 0.1,
+      "num_clients": 4,
+      "use_rag": true,
+      "use_blockchain": false,
+      "datasize": 0.0125,
+      "epoch": 7,
+      "class_names": [
+        "covid",
+        "lung_opacity",
+        "normal",
+        "pneumonia"
+      ],
+      "num_classes": 4,
+      "backbone": "resnet_vgg",
+      "model_role": "server"
+    },
+    "model_hash": "1f565b34609e1115d26ebc70afcca74e49abfa47d1bfb475e5ced7c28dfc9c58",
+    "sha256": "1f565b34609e1115d26ebc70afcca74e49abfa47d1bfb475e5ced7c28dfc9c58",
+    "timestamp": "2026-04-07T10:36:11.552305",
+    "checkpoint_path": "C:\\Users\\reeve\\MedRAG\\models\\registry\\checkpoints\\v1.30_round7_20260407_103611.pt",
+    "backbone": "resnet_vgg",
+    "model_name": "resnet_vgg"
+  },
+  "v1.31_round7_20260407_103611": {
+    "version_id": "v1.31_round7_20260407_103611",
+    "round_num": 7,
+    "metrics": {
+      "val_accuracy": 100.0,
+      "val_loss": 0.7720468044281006,
+      "test_accuracy": 60.0,
+      "test_loss": 1.0175893306732178,
+      "hospital": "Hospital A"
+    },
+    "config": {
+      "theta": 0.1,
+      "num_clients": 4,
+      "use_rag": true,
+      "use_blockchain": false,
+      "datasize": 0.0125,
+      "epoch": 7,
+      "class_names": [
+        "covid",
+        "lung_opacity",
+        "normal",
+        "pneumonia"
+      ],
+      "num_classes": 4,
+      "backbone": "resnet_vgg",
+      "hospital": "Hospital A",
+      "model_role": "client",
+      "classes": [
+        "covid",
+        "lung_opacity",
+        "normal",
+        "pneumonia"
+      ]
+    },
+    "model_hash": "8eefcceb699599331f1d0caf1a814c7a6629a8b2c3f99940e71f2761f696234e",
+    "sha256": "8eefcceb699599331f1d0caf1a814c7a6629a8b2c3f99940e71f2761f696234e",
+    "timestamp": "2026-04-07T10:36:15.985910",
+    "checkpoint_path": "C:\\Users\\reeve\\MedRAG\\models\\registry\\checkpoints\\v1.31_round7_20260407_103611.pt",
+    "backbone": "resnet_vgg",
+    "model_name": "resnet_vgg",
+    "hospital": "Hospital A"
+  },
+  "v1.32_round7_20260407_103616": {
+    "version_id": "v1.32_round7_20260407_103616",
+    "round_num": 7,
+    "metrics": {
+      "val_accuracy": 100.0,
+      "val_loss": 0.7720468044281006,
+      "test_accuracy": 60.0,
+      "test_loss": 1.0175893306732178,
+      "hospital": "Hospital B"
+    },
+    "config": {
+      "theta": 0.1,
+      "num_clients": 4,
+      "use_rag": true,
+      "use_blockchain": false,
+      "datasize": 0.0125,
+      "epoch": 7,
+      "class_names": [
+        "covid",
+        "lung_opacity",
+        "normal",
+        "pneumonia"
+      ],
+      "num_classes": 4,
+      "backbone": "resnet_vgg",
+      "hospital": "Hospital B",
+      "model_role": "client",
+      "classes": [
+        "covid",
+        "lung_opacity",
+        "normal",
+        "pneumonia"
+      ]
+    },
+    "model_hash": "092d944ed769b78831867d511d230e02eaefed50463c7d6b0c9f037d4b9cfd47",
+    "sha256": "092d944ed769b78831867d511d230e02eaefed50463c7d6b0c9f037d4b9cfd47",
+    "timestamp": "2026-04-07T10:36:21.393018",
+    "checkpoint_path": "C:\\Users\\reeve\\MedRAG\\models\\registry\\checkpoints\\v1.32_round7_20260407_103616.pt",
+    "backbone": "resnet_vgg",
+    "model_name": "resnet_vgg",
+    "hospital": "Hospital B"
+  },
+  "v1.33_round7_20260407_103621": {
+    "version_id": "v1.33_round7_20260407_103621",
+    "round_num": 7,
+    "metrics": {
+      "val_accuracy": 100.0,
+      "val_loss": 0.7720468044281006,
+      "test_accuracy": 60.0,
+      "test_loss": 1.0175893306732178,
+      "hospital": "Hospital C"
+    },
+    "config": {
+      "theta": 0.1,
+      "num_clients": 4,
+      "use_rag": true,
+      "use_blockchain": false,
+      "datasize": 0.0125,
+      "epoch": 7,
+      "class_names": [
+        "covid",
+        "lung_opacity",
+        "normal",
+        "pneumonia"
+      ],
+      "num_classes": 4,
+      "backbone": "resnet_vgg",
+      "hospital": "Hospital C",
+      "model_role": "client",
+      "classes": [
+        "covid",
+        "lung_opacity",
+        "normal",
+        "pneumonia"
+      ]
+    },
+    "model_hash": "c913fb208567a84494eb7bb25c84ab77bf261277f91a52c756354536552c08f8",
+    "sha256": "c913fb208567a84494eb7bb25c84ab77bf261277f91a52c756354536552c08f8",
+    "timestamp": "2026-04-07T10:36:24.172942",
+    "checkpoint_path": "C:\\Users\\reeve\\MedRAG\\models\\registry\\checkpoints\\v1.33_round7_20260407_103621.pt",
+    "backbone": "resnet_vgg",
+    "model_name": "resnet_vgg",
+    "hospital": "Hospital C"
+  },
+  "v1.34_round7_20260407_103624": {
+    "version_id": "v1.34_round7_20260407_103624",
+    "round_num": 7,
+    "metrics": {
+      "val_accuracy": 100.0,
+      "val_loss": 0.7720468044281006,
+      "test_accuracy": 60.0,
+      "test_loss": 1.0175893306732178,
+      "hospital": "Hospital D"
+    },
+    "config": {
+      "theta": 0.1,
+      "num_clients": 4,
+      "use_rag": true,
+      "use_blockchain": false,
+      "datasize": 0.0125,
+      "epoch": 7,
+      "class_names": [
+        "covid",
+        "lung_opacity",
+        "normal",
+        "pneumonia"
+      ],
+      "num_classes": 4,
+      "backbone": "resnet_vgg",
+      "hospital": "Hospital D",
+      "model_role": "client",
+      "classes": [
+        "covid",
+        "lung_opacity",
+        "normal",
+        "pneumonia"
+      ]
+    },
+    "model_hash": "945e8281529ef2930ed0460c7fa5a322b11385c775a57e12d85e472b3d20d25b",
+    "sha256": "945e8281529ef2930ed0460c7fa5a322b11385c775a57e12d85e472b3d20d25b",
+    "timestamp": "2026-04-07T10:36:25.878049",
+    "checkpoint_path": "C:\\Users\\reeve\\MedRAG\\models\\registry\\checkpoints\\v1.34_round7_20260407_103624.pt",
+    "backbone": "resnet_vgg",
+    "model_name": "resnet_vgg",
+    "hospital": "Hospital D"
+  },
+  "v1.35_round8_20260407_104032": {
+    "version_id": "v1.35_round8_20260407_104032",
+    "round_num": 8,
+    "metrics": {
+      "val_accuracy": 100.0,
+      "val_loss": 0.730685830116272,
+      "test_accuracy": 60.0,
+      "test_loss": 1.1653858423233032
+    },
+    "config": {
+      "theta": 0.1,
+      "num_clients": 4,
+      "use_rag": true,
+      "use_blockchain": false,
+      "datasize": 0.0125,
+      "epoch": 8,
+      "class_names": [
+        "covid",
+        "lung_opacity",
+        "normal",
+        "pneumonia"
+      ],
+      "num_classes": 4,
+      "backbone": "resnet_vgg",
+      "model_role": "server"
+    },
+    "model_hash": "c4df2fa99c7656a8bf27dea1f0ba1c165526844a48e842aacacdaf7d3e80fa34",
+    "sha256": "c4df2fa99c7656a8bf27dea1f0ba1c165526844a48e842aacacdaf7d3e80fa34",
+    "timestamp": "2026-04-07T10:40:32.523857",
+    "checkpoint_path": "C:\\Users\\reeve\\MedRAG\\models\\registry\\checkpoints\\v1.35_round8_20260407_104032.pt",
+    "backbone": "resnet_vgg",
+    "model_name": "resnet_vgg"
+  },
+  "v1.36_round8_20260407_104032": {
+    "version_id": "v1.36_round8_20260407_104032",
+    "round_num": 8,
+    "metrics": {
+      "val_accuracy": 100.0,
+      "val_loss": 0.730685830116272,
+      "test_accuracy": 60.0,
+      "test_loss": 1.1653858423233032,
+      "hospital": "Hospital A"
+    },
+    "config": {
+      "theta": 0.1,
+      "num_clients": 4,
+      "use_rag": true,
+      "use_blockchain": false,
+      "datasize": 0.0125,
+      "epoch": 8,
+      "class_names": [
+        "covid",
+        "lung_opacity",
+        "normal",
+        "pneumonia"
+      ],
+      "num_classes": 4,
+      "backbone": "resnet_vgg",
+      "hospital": "Hospital A",
+      "model_role": "client",
+      "classes": [
+        "covid",
+        "lung_opacity",
+        "normal",
+        "pneumonia"
+      ]
+    },
+    "model_hash": "7a7fef8ccace1818c5ada0abf0f78684565486f18db2b477a783f08e5f010767",
+    "sha256": "7a7fef8ccace1818c5ada0abf0f78684565486f18db2b477a783f08e5f010767",
+    "timestamp": "2026-04-07T10:40:38.369865",
+    "checkpoint_path": "C:\\Users\\reeve\\MedRAG\\models\\registry\\checkpoints\\v1.36_round8_20260407_104032.pt",
+    "backbone": "resnet_vgg",
+    "model_name": "resnet_vgg",
+    "hospital": "Hospital A"
+  },
+  "v1.37_round8_20260407_104038": {
+    "version_id": "v1.37_round8_20260407_104038",
+    "round_num": 8,
+    "metrics": {
+      "val_accuracy": 100.0,
+      "val_loss": 0.730685830116272,
+      "test_accuracy": 60.0,
+      "test_loss": 1.1653858423233032,
+      "hospital": "Hospital B"
+    },
+    "config": {
+      "theta": 0.1,
+      "num_clients": 4,
+      "use_rag": true,
+      "use_blockchain": false,
+      "datasize": 0.0125,
+      "epoch": 8,
+      "class_names": [
+        "covid",
+        "lung_opacity",
+        "normal",
+        "pneumonia"
+      ],
+      "num_classes": 4,
+      "backbone": "resnet_vgg",
+      "hospital": "Hospital B",
+      "model_role": "client",
+      "classes": [
+        "covid",
+        "lung_opacity",
+        "normal",
+        "pneumonia"
+      ]
+    },
+    "model_hash": "4de8e4c73c5c3e8e9f214863503064dc0bd04f57b2266f56b231775863505d24",
+    "sha256": "4de8e4c73c5c3e8e9f214863503064dc0bd04f57b2266f56b231775863505d24",
+    "timestamp": "2026-04-07T10:40:44.046658",
+    "checkpoint_path": "C:\\Users\\reeve\\MedRAG\\models\\registry\\checkpoints\\v1.37_round8_20260407_104038.pt",
+    "backbone": "resnet_vgg",
+    "model_name": "resnet_vgg",
+    "hospital": "Hospital B"
+  },
+  "v1.38_round8_20260407_104044": {
+    "version_id": "v1.38_round8_20260407_104044",
+    "round_num": 8,
+    "metrics": {
+      "val_accuracy": 100.0,
+      "val_loss": 0.730685830116272,
+      "test_accuracy": 60.0,
+      "test_loss": 1.1653858423233032,
+      "hospital": "Hospital C"
+    },
+    "config": {
+      "theta": 0.1,
+      "num_clients": 4,
+      "use_rag": true,
+      "use_blockchain": false,
+      "datasize": 0.0125,
+      "epoch": 8,
+      "class_names": [
+        "covid",
+        "lung_opacity",
+        "normal",
+        "pneumonia"
+      ],
+      "num_classes": 4,
+      "backbone": "resnet_vgg",
+      "hospital": "Hospital C",
+      "model_role": "client",
+      "classes": [
+        "covid",
+        "lung_opacity",
+        "normal",
+        "pneumonia"
+      ]
+    },
+    "model_hash": "846f0386a50098184d3fb60f07ca1e83131af4f6a8269d291e316ad9dc33cdc6",
+    "sha256": "846f0386a50098184d3fb60f07ca1e83131af4f6a8269d291e316ad9dc33cdc6",
+    "timestamp": "2026-04-07T10:40:50.174700",
+    "checkpoint_path": "C:\\Users\\reeve\\MedRAG\\models\\registry\\checkpoints\\v1.38_round8_20260407_104044.pt",
+    "backbone": "resnet_vgg",
+    "model_name": "resnet_vgg",
+    "hospital": "Hospital C"
+  },
+  "v1.39_round8_20260407_104050": {
+    "version_id": "v1.39_round8_20260407_104050",
+    "round_num": 8,
+    "metrics": {
+      "val_accuracy": 100.0,
+      "val_loss": 0.730685830116272,
+      "test_accuracy": 60.0,
+      "test_loss": 1.1653858423233032,
+      "hospital": "Hospital D"
+    },
+    "config": {
+      "theta": 0.1,
+      "num_clients": 4,
+      "use_rag": true,
+      "use_blockchain": false,
+      "datasize": 0.0125,
+      "epoch": 8,
+      "class_names": [
+        "covid",
+        "lung_opacity",
+        "normal",
+        "pneumonia"
+      ],
+      "num_classes": 4,
+      "backbone": "resnet_vgg",
+      "hospital": "Hospital D",
+      "model_role": "client",
+      "classes": [
+        "covid",
+        "lung_opacity",
+        "normal",
+        "pneumonia"
+      ]
+    },
+    "model_hash": "3aa04526089f4d7e010feb779b24b05725e6818425c9b2715ce5351c49f946c6",
+    "sha256": "3aa04526089f4d7e010feb779b24b05725e6818425c9b2715ce5351c49f946c6",
+    "timestamp": "2026-04-07T10:40:52.876712",
+    "checkpoint_path": "C:\\Users\\reeve\\MedRAG\\models\\registry\\checkpoints\\v1.39_round8_20260407_104050.pt",
+    "backbone": "resnet_vgg",
+    "model_name": "resnet_vgg",
+    "hospital": "Hospital D"
+  },
+  "v1.40_round9_20260407_104512": {
+    "version_id": "v1.40_round9_20260407_104512",
+    "round_num": 9,
+    "metrics": {
+      "val_accuracy": 100.0,
+      "val_loss": 0.660880982875824,
+      "test_accuracy": 60.0,
+      "test_loss": 1.1358659267425537
+    },
+    "config": {
+      "theta": 0.1,
+      "num_clients": 4,
+      "use_rag": true,
+      "use_blockchain": false,
+      "datasize": 0.0125,
+      "epoch": 9,
+      "class_names": [
+        "covid",
+        "lung_opacity",
+        "normal",
+        "pneumonia"
+      ],
+      "num_classes": 4,
+      "backbone": "resnet_vgg",
+      "model_role": "server"
+    },
+    "model_hash": "89dce96de94033352d511ebf1d9c35a1b7df98903ddb1d02bb481efb2e99bebf",
+    "sha256": "89dce96de94033352d511ebf1d9c35a1b7df98903ddb1d02bb481efb2e99bebf",
+    "timestamp": "2026-04-07T10:45:12.491976",
+    "checkpoint_path": "C:\\Users\\reeve\\MedRAG\\models\\registry\\checkpoints\\v1.40_round9_20260407_104512.pt",
+    "backbone": "resnet_vgg",
+    "model_name": "resnet_vgg"
+  },
+  "v1.41_round9_20260407_104512": {
+    "version_id": "v1.41_round9_20260407_104512",
+    "round_num": 9,
+    "metrics": {
+      "val_accuracy": 100.0,
+      "val_loss": 0.660880982875824,
+      "test_accuracy": 60.0,
+      "test_loss": 1.1358659267425537,
+      "hospital": "Hospital A"
+    },
+    "config": {
+      "theta": 0.1,
+      "num_clients": 4,
+      "use_rag": true,
+      "use_blockchain": false,
+      "datasize": 0.0125,
+      "epoch": 9,
+      "class_names": [
+        "covid",
+        "lung_opacity",
+        "normal",
+        "pneumonia"
+      ],
+      "num_classes": 4,
+      "backbone": "resnet_vgg",
+      "hospital": "Hospital A",
+      "model_role": "client",
+      "classes": [
+        "covid",
+        "lung_opacity",
+        "normal",
+        "pneumonia"
+      ]
+    },
+    "model_hash": "de917a8eb3af704127051b0c54673c8f21c32d22f0a70767e75962d9c3a77a37",
+    "sha256": "de917a8eb3af704127051b0c54673c8f21c32d22f0a70767e75962d9c3a77a37",
+    "timestamp": "2026-04-07T10:45:17.123084",
+    "checkpoint_path": "C:\\Users\\reeve\\MedRAG\\models\\registry\\checkpoints\\v1.41_round9_20260407_104512.pt",
+    "backbone": "resnet_vgg",
+    "model_name": "resnet_vgg",
+    "hospital": "Hospital A"
+  }
+}

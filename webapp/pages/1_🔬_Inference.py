@@ -220,7 +220,7 @@ with col2:
 
                 # Prediction header
                 st.markdown(f"### 🩺 Prediction: **{prediction.upper()}**")
-                st.markdown(f"**Confidence:** {confidence:.1%}")
+                st.markdown(f"**Class Probability:** {confidence:.1%}")
                 st.progress(confidence)
 
                 # Uncertainty / Review flag

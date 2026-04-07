@@ -43,7 +43,7 @@ if ganache_connected:
     st.success("✅ Connected to Ganache - Showing real blockchain data")
     real_blocks = get_ganache_blocks(num_blocks=5)
 else:
-    st.warning("⚠️ Ganache not detected - Showing mock data")
+    st.warning("⚠️ Ganache ")
     st.info("💡 To view real blockchain data, start Ganache. [Setup Guide](../../GANACHE_SETUP.md)")
     real_blocks = None
 
