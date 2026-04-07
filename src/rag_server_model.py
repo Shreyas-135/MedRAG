@@ -117,14 +117,16 @@ class RAGEnhancedServerModel(nn.Module):
             return self.langchain_pipeline
         return None
     
-    def explain_prediction(self, embedding, prediction, confidence):
+    def explain_prediction(self, embedding, prediction, confidence, class_names=None):
         """
         Generate LLM explanation for a prediction.
         
         Args:
             embedding: Input embedding tensor
-            prediction: Predicted class
+            prediction: Predicted class index (int) or name (str)
             confidence: Prediction confidence
+            class_names: Optional list of class names (falls back to
+                         ['Normal', 'COVID-19'] for backward compatibility)
             
         Returns:
             Explanation dictionary or None
@@ -136,9 +138,13 @@ class RAGEnhancedServerModel(nn.Module):
             if emb_np.ndim > 1:
                 emb_np = emb_np[0]  # Get first sample
             
-            # Query pipeline
-            class_names = ['Normal', 'COVID-19']
-            pred_name = class_names[prediction] if prediction < len(class_names) else str(prediction)
+            # Resolve the predicted class name using the provided class_names
+            # (falls back to the old hard-coded 2-class list only as last resort)
+            _class_names = class_names or ['Normal', 'COVID-19']
+            if isinstance(prediction, int):
+                pred_name = _class_names[prediction] if prediction < len(_class_names) else str(prediction)
+            else:
+                pred_name = str(prediction)
             
             result = self.langchain_pipeline.query(
                 embedding=emb_np,

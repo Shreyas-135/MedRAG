@@ -91,6 +91,10 @@ def get_ensemble_engine():
     Load all available VFLFramework checkpoints and return a
     MultiModelEnsembleEngine (weighted average over resnet18/densenet121/
     efficientnet_b0).  Falls back gracefully if some checkpoints are absent.
+
+    When GEMINI_API_KEY is set in the environment, the engine will use Gemini
+    to generate RAG explanations; otherwise it falls back to static radiology
+    templates.
     """
     repo_root = Path(__file__).parent.parent
     ckpt_dir = repo_root / "outputs" / "checkpoints"
@@ -98,6 +102,7 @@ def get_ensemble_engine():
         return load_multi_model_ensemble(
             checkpoints_dir=str(ckpt_dir),
             class_names=["Normal", "COVID", "Lung_Opacity", "Pneumonia"],
+            use_langchain=True,
         )
     except Exception as exc:
         st.warning(f"Could not build ensemble engine: {exc}")
@@ -583,11 +588,25 @@ def display_system_status():
     status_icon = "✅" if all(status.values()) else "⚠️"
     st.sidebar.markdown(f"{status_icon} **System Status**")
     
+    # Check for trained checkpoints
+    repo_root = Path(__file__).parent.parent
+    ckpt_dir = repo_root / "outputs" / "checkpoints"
+    backbones = ["resnet18", "densenet121", "efficientnet_b0"]
+    found_ckpts = [b for b in backbones if (ckpt_dir / f"{b}_best.pth").is_file()]
+    ckpt_status = f"{'✅' if found_ckpts else '⚠️'} {len(found_ckpts)}/{len(backbones)} checkpoints"
+
+    # Check Gemini API key
+    gemini_key = os.environ.get("GEMINI_API_KEY", "")
+    gemini_configured = bool(gemini_key and gemini_key != "your-gemini-api-key-here")
+    gemini_status = "✅ configured" if gemini_configured else "⚠️ not set"
+
     st.sidebar.markdown(f"""
     - Registry: {'✅' if status['registry_ok'] else '❌'}
     - Ledger: {'✅' if status['ledger_ok'] else '❌'}
     - Models: {registry_summary['total_versions']} versions
     - Training Logs: {ledger_summary['training_entries']} entries
+    - Checkpoints: {ckpt_status}
+    - Gemini API Key: {gemini_status}
     """)
 
 
