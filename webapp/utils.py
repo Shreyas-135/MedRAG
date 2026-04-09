@@ -762,7 +762,10 @@ def compute_inference_provenance_hashes(result: dict, version_id: str = "unknown
         content = json.dumps(obj, sort_keys=True, separators=(",", ":"))
         return hashlib.sha256(content.encode()).hexdigest()
 
-    # model_version_hash – mirrors src/provenance.hash_model_version convention
+    # model_version_hash – mirrors src/provenance.hash_model_version convention.
+    # model_hash is left as "" when the weight SHA-256 is not available at
+    # inference time (same behaviour as check_model_governance_approval in this
+    # file and src/provenance.hash_model_version default).
     model_version_hash = _sha256_json({"version_id": version_id, "model_hash": ""})
 
     # knowledge_base_hash – SHA-256 of citation source+url list (no raw snippets)
