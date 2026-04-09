@@ -738,6 +738,79 @@ def check_model_governance_approval(version_id: str) -> dict:
         }
 
 
+def compute_inference_provenance_hashes(result: dict, version_id: str = "unknown") -> dict:
+    """
+    Derive the five component SHA-256 hashes required by
+    ``ProvenanceIntegrator.anchor_provenance`` from an inference result dict.
+
+    All sensitive content (explanations, citations) is represented as hashes
+    only – no raw text is returned or stored on-chain.
+
+    Uses deterministic ``json.dumps(sort_keys=True, separators=(",", ":"))``
+    so the same result always produces the same hashes.
+
+    Args:
+        result: Dict returned by the inference engine's ``predict()`` method.
+        version_id: Model registry version ID string (or ``'unknown'``).
+
+    Returns:
+        Dict with keys ``model_version_hash``, ``knowledge_base_hash``,
+        ``explanation_hash``, ``retrieval_hash``, ``prompt_hash``, and
+        ``generation_params_hash``.  All values are 64-char hex SHA-256 strings.
+    """
+    def _sha256_json(obj):
+        content = json.dumps(obj, sort_keys=True, separators=(",", ":"))
+        return hashlib.sha256(content.encode()).hexdigest()
+
+    # model_version_hash – mirrors src/provenance.hash_model_version convention.
+    # model_hash is left as "" when the weight SHA-256 is not available at
+    # inference time (same behaviour as check_model_governance_approval in this
+    # file and src/provenance.hash_model_version default).
+    model_version_hash = _sha256_json({"version_id": version_id, "model_hash": ""})
+
+    # knowledge_base_hash – SHA-256 of citation source+url list (no raw snippets)
+    citations = result.get("citations") or []
+    _cit_ids = [
+        {"source": c.get("source", ""), "url": c.get("url", "")}
+        for c in citations
+    ]
+    knowledge_base_hash = _sha256_json({"citations": _cit_ids})
+
+    # explanation_hash – SHA-256 of the RAG explanation text
+    explanation = (
+        result.get("rag_explanation")
+        or result.get("explanation_text")
+        or ""
+    )
+    explanation_hash = hashlib.sha256(str(explanation).encode()).hexdigest()
+
+    # retrieval_hash – SHA-256 of class probabilities (rounded for determinism)
+    probabilities = result.get("probabilities") or {}
+    _probs_rounded = {k: round(float(v), 8) for k, v in probabilities.items()}
+    retrieval_hash = _sha256_json({"probabilities": _probs_rounded})
+
+    # prompt_hash – SHA-256 of prediction label + model_type (no patient PII)
+    prompt_hash = _sha256_json({
+        "prediction": result.get("prediction", ""),
+        "model_type": result.get("model_type", ""),
+    })
+
+    # generation_params_hash – SHA-256 of inference configuration
+    generation_params_hash = _sha256_json({
+        "inference_time_rounded": round(float(result.get("inference_time", 0.0)), 2),
+        "num_models": result.get("num_models", 1),
+    })
+
+    return {
+        "model_version_hash": model_version_hash,
+        "knowledge_base_hash": knowledge_base_hash,
+        "explanation_hash": explanation_hash,
+        "retrieval_hash": retrieval_hash,
+        "prompt_hash": prompt_hash,
+        "generation_params_hash": generation_params_hash,
+    }
+
+
 def get_transaction_details(tx_hash):
     """Get transaction details from Ganache."""
     try:

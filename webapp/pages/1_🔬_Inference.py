@@ -30,6 +30,7 @@ from webapp.utils import (
     display_info_message,
     check_model_governance_approval,
     generate_clinician_pdf,
+    compute_inference_provenance_hashes,
 )
 
 st.set_page_config(
@@ -208,6 +209,7 @@ with col2:
                 st.session_state['last_result']    = result
                 st.session_state['last_temp_path'] = str(temp_path)
                 st.session_state['last_patient_info'] = patient_info
+                st.session_state['last_selected_version'] = selected_version
 
                 # ── Diagnostic banners ──────────────────────────────────────
                 if result.get("using_random_weights"):
@@ -450,3 +452,232 @@ with col2:
     elif uploaded_file is None:
         display_info_message("👆 Please upload an X-ray image to begin analysis")
 
+# ============================================================================
+# Step 3: Cryptographic Provenance Anchoring
+# ============================================================================
+# This section appears whenever inference has been run (result stored in
+# session state) and lets the user anchor the provenance bundle on-chain,
+# setting prov_verified=True which unlocks the JSON export.
+
+_stored_result = st.session_state.get('last_result')
+
+if _stored_result is not None:
+    st.markdown("---")
+    st.markdown("## 🔐 Step 3: Cryptographic Provenance Anchoring")
+    st.markdown(
+        "Anchor a tamper-proof SHA-256 hash of the inference provenance bundle "
+        "on-chain (Ganache). Only hashes are stored – no patient data or raw text "
+        "is sent to the blockchain. Completing this step unlocks the JSON export."
+    )
+
+    if st.session_state.get('prov_verified', False):
+        _prov_tx = st.session_state.get('prov_tx_hash', 'N/A')
+        st.success(
+            f"✅ **Provenance anchored and verified!**  \n"
+            f"Transaction hash: `{_prov_tx}`  \n"
+            "🔓 Export is unlocked."
+        )
+        _anchor_details = st.session_state.get('prov_anchor_info') or {}
+        if _anchor_details:
+            with st.expander("🔍 On-chain anchor details"):
+                st.json({k: str(v) for k, v in _anchor_details.items()})
+
+        # Standalone download (available immediately after anchoring)
+        import json as _json
+        _export_data = _json.dumps({
+            "prediction": _stored_result.get('prediction'),
+            "confidence": _stored_result.get('confidence'),
+            "probabilities": _stored_result.get('probabilities'),
+            "per_hospital": _stored_result.get('per_hospital'),
+            "provenance": st.session_state.get('prov_bundle'),
+            "tx_hash": st.session_state.get('prov_tx_hash'),
+            "anchor_info": st.session_state.get('prov_anchor_info'),
+        }, indent=2, default=str)
+        st.download_button(
+            label="⬇️ Download Result & Provenance (JSON)",
+            data=_export_data,
+            file_name="medrag_result_provenance.json",
+            mime="application/json",
+            use_container_width=True,
+        )
+
+    else:
+        _rpc_default = os.environ.get("GANACHE_URL", "http://127.0.0.1:7545")
+        _pk_env      = os.environ.get("BLOCKCHAIN_PRIVATE_KEY", "")
+
+        _prov_col1, _prov_col2 = st.columns(2)
+        with _prov_col1:
+            _prov_rpc = st.text_input(
+                "Ganache RPC URL",
+                value=_rpc_default,
+                key="prov_rpc_url",
+                help="HTTP RPC endpoint of your Ganache node (e.g. http://127.0.0.1:7545).",
+            )
+            _prov_pk = st.text_input(
+                "Private Key (0x + 64 hex chars)",
+                value=_pk_env,
+                type="password",
+                key="prov_private_key",
+                help=(
+                    "Ganache account **private key** – copy from the 'Private Keys' "
+                    "section of the Ganache terminal output.  "
+                    "This is NOT the account address (which is only 40 hex chars)."
+                ),
+            )
+        with _prov_col2:
+            _prov_contract = st.text_input(
+                "Contract Address (leave blank to auto-deploy)",
+                value="",
+                key="prov_contract_addr",
+                help=(
+                    "Address of a pre-deployed ProvenanceRegistry contract.  "
+                    "Leave blank to compile ProvenanceRegistry.sol and deploy it automatically."
+                ),
+            )
+
+        _prov_mock = st.checkbox(
+            "🧪 Mock mode (demo / offline – no Ganache required)",
+            value=False,
+            key="prov_use_mock",
+            help=(
+                "In mock mode provenance is stored in-process only; "
+                "no real blockchain transaction is submitted.  "
+                "Useful for demos when Ganache is not available."
+            ),
+        )
+
+        if st.button("🔗 Anchor Provenance On-Chain", type="primary", key="prov_anchor_btn"):
+            _pk_val       = _prov_pk.strip()
+            _rpc_val      = _prov_rpc.strip()
+            _contract_val = _prov_contract.strip()
+
+            # ── Input validation ────────────────────────────────────────────
+            _err_msg = None
+            if not _prov_mock:
+                _pk_hex = _pk_val.removeprefix("0x")
+                if not _pk_val:
+                    _err_msg = (
+                        "❌ **Private key is required** in real mode.  \n"
+                        "Enter the private key from your Ganache terminal, or enable Mock mode."
+                    )
+                elif len(_pk_hex) != 64:
+                    _err_msg = (
+                        f"❌ **Invalid private key** – got **{len(_pk_hex)}** hex characters, "
+                        "expected **64**.  \n"
+                        "Make sure you copied the **Private Key** row from Ganache "
+                        "(not the account address, which is only 40 chars).  \n"
+                        "Example: `0x` followed by 64 hex digits."
+                    )
+
+            if _err_msg:
+                st.error(_err_msg)
+            else:
+                with st.spinner("Anchoring provenance on-chain…"):
+                    try:
+                        import sys as _sys
+                        _src_path = os.path.abspath(
+                            os.path.join(os.path.dirname(__file__), '..', '..', 'src')
+                        )
+                        if _src_path not in _sys.path:
+                            _sys.path.insert(0, _src_path)
+
+                        from provenance import build_provenance_bundle
+                        from provenance_integrator import ProvenanceIntegrator
+
+                        # ── Build component hashes ──────────────────────────
+                        _ver_id = st.session_state.get('last_selected_version', 'unknown')
+                        _hashes = compute_inference_provenance_hashes(_stored_result, _ver_id)
+
+                        # ── Build canonical provenance bundle ───────────────
+                        _bundle = build_provenance_bundle(
+                            knowledge_base_hash=_hashes['knowledge_base_hash'],
+                            explanation_hash=_hashes['explanation_hash'],
+                            retrieval_hash=_hashes['retrieval_hash'],
+                            model_version_hash=_hashes['model_version_hash'],
+                            prompt_hash=_hashes['prompt_hash'],
+                            generation_params_hash=_hashes['generation_params_hash'],
+                        )
+
+                        # ── Create ProvenanceIntegrator ─────────────────────
+                        if _prov_mock:
+                            _integrator = ProvenanceIntegrator(use_mock=True)
+                            _signer_addr = "0x" + "a" * 40
+                        else:
+                            _init_kwargs = {
+                                "rpc_url": _rpc_val,
+                                "private_key": _pk_val,
+                            }
+                            if _contract_val:
+                                _init_kwargs["contract_address"] = _contract_val
+                            _integrator = ProvenanceIntegrator(**_init_kwargs)
+                            # Derive signer address from the private key
+                            _signer_addr = _integrator.deployer_address
+
+                        # ── Anchor on-chain ─────────────────────────────────
+                        _tx_hash = _integrator.anchor_provenance(
+                            bundle_hash=_bundle["bundle_hash"],
+                            model_hash=_hashes["model_version_hash"],
+                            kb_hash=_hashes["knowledge_base_hash"],
+                            explanation_hash=_hashes["explanation_hash"],
+                            signer_address=_signer_addr,
+                        )
+
+                        # ── Fetch anchor details ────────────────────────────
+                        _anchor_info = _integrator.get_anchor(_bundle["bundle_hash"]) or {}
+
+                        # ── Persist to session state ────────────────────────
+                        st.session_state['prov_bundle']      = _bundle
+                        st.session_state['prov_tx_hash']     = _tx_hash
+                        st.session_state['prov_anchor_info'] = _anchor_info
+                        st.session_state['prov_verified']    = True
+
+                        st.success(
+                            f"✅ **Provenance anchored successfully!**  \n"
+                            f"Transaction hash: `{_tx_hash}`  \n"
+                            f"Bundle hash: `{_bundle['bundle_hash'][:32]}…`  \n"
+                            "🔓 **Export is now unlocked** – the download button has appeared above."
+                        )
+                        st.balloons()
+                        st.rerun()
+
+                    except ConnectionError as _ce:
+                        st.error(
+                            f"❌ **Cannot connect to Ganache** at `{_rpc_val}`:  \n{_ce}  \n\n"
+                            "**Fixes:**  \n"
+                            "- Ensure Ganache is running: `ganache --port 7545`  \n"
+                            "- Check the RPC URL above matches the Ganache port  \n"
+                            "- Or enable **Mock mode** for a demo without Ganache"
+                        )
+                    except ImportError as _ie:
+                        _missing = str(_ie)
+                        _solc_hint = (
+                            "  \n- For solc: `pip install py-solc-x` then "
+                            "`python -c \"import solcx; solcx.install_solc('0.8.23')\"`"
+                            if "solc" in _missing.lower() else ""
+                        )
+                        st.error(
+                            f"❌ **Missing dependency**: `{_missing}`  \n\n"
+                            "Install with:  \n"
+                            "`pip install web3 py-solc-x eth-tester py-evm`"
+                            f"{_solc_hint}"
+                        )
+                    except Exception as _ex:
+                        import traceback as _tb
+                        st.error(f"❌ **Anchoring failed**: {_ex}")
+                        with st.expander("📋 Full traceback (for debugging)"):
+                            st.code(_tb.format_exc())
+
+    # ── Admin Override (emergency bypass) ──────────────────────────────────
+    with st.expander("🔑 Admin Override (emergency bypass)", expanded=False):
+        st.warning(
+            "⚠️ **Admin Override** bypasses the provenance gate and allows export "
+            "without on-chain verification.  Use only for authorised demos or testing."
+        )
+        _admin_toggle = st.checkbox(
+            "Enable Admin Override",
+            value=st.session_state.get('admin_override', False),
+            key="admin_override_toggle",
+        )
+        if _admin_toggle != st.session_state.get('admin_override', False):
+            st.session_state['admin_override'] = _admin_toggle
+            st.rerun()
